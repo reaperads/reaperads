@@ -77,9 +77,6 @@ export default function Header({ lang, onLang, theme, onToggleTheme, activeNav, 
           <a href="#work" data-nav="work" aria-current={activeNav === 'work' ? 'true' : undefined} onClick={() => onNavClick('work')}>
             <span>{t('nav.work')}</span>
           </a>
-          <a href="https://agent.reaper.my.id">
-            <span>{t('nav.agents')}</span>
-          </a>
           <a href="#contact" data-nav="contact" aria-current={activeNav === 'contact' ? 'true' : undefined} onClick={() => onNavClick('contact')}>
             <span>{t('nav.contact')}</span>
           </a>

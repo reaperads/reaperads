@@ -23,6 +23,9 @@ export default function Hero({ lang, onLangChange, bootSignal, data, dataLive, a
             <a href="https://t.me/holyinthefire" target="_blank" rel="noopener">
               <span>TG</span>@holyinthefire
             </a>
+            <a href="https://agent.reaper.my.id">
+              <span>AG</span>agent.reaper.my.id
+            </a>
           </div>
         </div>
 
