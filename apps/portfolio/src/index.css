@@ -130,6 +130,12 @@
       .handles a { color: var(--ink-dim); text-decoration: none; padding: 6px 0; display: inline-block; }
       .handles a:hover { color: var(--accent); }
       .handles a span { color: var(--ink-faint); margin-right: 6px; }
+      .hero-agents-btn {
+        display: inline-flex; align-items: center; gap: 8px; margin-top: 24px; padding: 10px 18px;
+        background: var(--accent); color: var(--accent-ink); border: 1px solid var(--accent); border-radius: 999px;
+        font-family: var(--mono); font-size: 13px; font-weight: 500; text-decoration: none;
+      }
+      .hero-agents-btn:hover { background: transparent; color: var(--accent); }
 
       /* ---------- terminal ---------- */
       .term {
