@@ -1,0 +1,1456 @@
+<!doctype html>
+<html lang="en" data-theme="terminal">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" href="data:," />
+    <title>Reaper — Security Researcher</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2rem; }
+
+      :root {
+        --serif: "Newsreader", Georgia, serif;
+        --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        --sans: "Public Sans", system-ui, -apple-system, sans-serif;
+      }
+      [data-theme="terminal"] {
+        color-scheme: dark;
+        --bg: #0b0e0c;
+        --bg-raise: #10140f;
+        --panel: #12160f;
+        --ink: #d8ddd2;
+        --ink-dim: #8b9484;
+        --ink-faint: #5c6656;
+        --line: #232a20;
+        --accent: #4ade80;
+        --accent-dim: #2c5c3e;
+        --accent-ink: #0b0e0c;
+        --term-bg: #0d100c;
+        --term-head: #161b14;
+        --warn: #d9a441;
+      }
+      [data-theme="paper"] {
+        color-scheme: light;
+        --bg: #f4f1ea;
+        --bg-raise: #efeade;
+        --panel: #faf8f2;
+        --ink: #22241f;
+        --ink-dim: #5d6055;
+        --ink-faint: #97998c;
+        --line: #d9d4c4;
+        --accent: #1c7a3f;
+        --accent-dim: #bcd8c2;
+        --accent-ink: #f4f1ea;
+        --term-bg: #1c201a;
+        --term-head: #262b23;
+        --warn: #9a6b12;
+      }
+
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 16px;
+        line-height: 1.6;
+        transition: background 0.35s ease, color 0.35s ease;
+      }
+      ::selection { background: var(--accent); color: var(--accent-ink); }
+
+      .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+      /* ---------- top bar (status + section nav + controls, one row) ---------- */
+      /* One single row holds everything: the open-status line and clock,
+         the section nav links, and the language switcher + paper theme
+         button. The whole bar is sticky so the sections stay reachable
+         while scrolling. On small screens the link row is replaced by a
+         hamburger (☰) button in the corner that opens the same links as
+         a dropdown menu under the bar. */
+      .statusbar {
+        position: sticky; top: 0; z-index: 60;
+        background: var(--bg);
+        border-bottom: 1px solid var(--line);
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink-dim);
+      }
+      .statusbar .wrap {
+        display: flex; align-items: center; gap: 14px;
+        min-height: 42px; flex-wrap: nowrap; padding-top: 2px; padding-bottom: 2px;
+      }
+      .statusbar .status-open { flex: none; white-space: nowrap; }
+      .statusbar .dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--accent); display: inline-block; margin-right: 7px;
+        animation: pulse 2.4s ease-in-out infinite;
+      }
+      @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+      .statusbar .spacer { flex: 1; }
+      .controls { display: flex; gap: 6px; align-items: center; flex: none; }
+      .seg {
+        display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden;
+      }
+      .seg button {
+        font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.04em;
+        background: transparent; color: var(--ink-dim); border: 0; cursor: pointer;
+        padding: 4px 11px; min-height: 30px;
+      }
+      .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 500; }
+      .theme-btn {
+        font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.04em;
+        background: transparent; color: var(--ink-dim);
+        border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+        padding: 4px 11px; min-height: 30px; white-space: nowrap;
+      }
+      .theme-btn:hover, .seg button:hover { color: var(--ink); }
+      .seg button[aria-pressed="true"]:hover { color: var(--accent-ink); }
+
+      /* ---------- hero ---------- */
+      .hero { padding: 72px 0 56px; }
+      .hero-grid {
+        display: grid; grid-template-columns: 1.05fr 1fr; gap: 56px; align-items: start;
+      }
+      .hero .role {
+        font-family: var(--mono); font-size: 13px; letter-spacing: 0.14em;
+        text-transform: uppercase; color: var(--accent); margin: 0 0 18px;
+      }
+      h1.name {
+        font-family: var(--serif); font-weight: 500;
+        font-size: clamp(56px, 8.5vw, 104px); line-height: 0.98;
+        letter-spacing: -0.015em; margin: 0 0 8px;
+      }
+      h1.name em { font-style: italic; font-weight: 400; color: var(--ink-dim); }
+      .hero .lede {
+        font-family: var(--serif); font-size: clamp(19px, 2.4vw, 23px);
+        line-height: 1.45; color: var(--ink); max-width: 30em; margin: 22px 0 0;
+      }
+      .hero .lede strong { font-weight: 600; }
+      .handles {
+        display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 30px;
+        font-family: var(--mono); font-size: 13px;
+      }
+      .handles a { color: var(--ink-dim); text-decoration: none; padding: 6px 0; display: inline-block; }
+      .handles a:hover { color: var(--accent); }
+      .handles a span { color: var(--ink-faint); margin-right: 6px; }
+
+      /* ---------- terminal ---------- */
+      .term {
+        background: var(--term-bg); border: 1px solid var(--line); border-radius: 10px;
+        overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,0.28);
+        font-family: var(--mono); font-size: 13.5px; line-height: 1.65;
+      }
+      .term-head {
+        background: var(--term-head); padding: 10px 14px;
+        display: flex; align-items: center; gap: 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+      }
+      .term-head i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+      .term-head i:nth-child(1) { background: #e0655a; }
+      .term-head i:nth-child(2) { background: #d9a441; }
+      .term-head i:nth-child(3) { background: #4ade80; }
+      .term-head span { margin-left: 8px; color: #9aa48f; font-size: 12px; }
+      .term-body { padding: 16px 18px 14px; height: 342px; overflow-y: auto; color: #c9d1bd; }
+      .term-body .p { color: #4ade80; }
+      .term-body .dim { color: #77816c; }
+      .term-body .out { white-space: pre-wrap; word-break: break-word; }
+      .term-body a { color: #4ade80; }
+      .caret::after {
+        content: "▋"; color: #4ade80; margin-left: 1px;
+        animation: blink 1s steps(1) infinite;
+      }
+      @keyframes blink { 50% { opacity: 0; } }
+      .term-input-row { display: flex; align-items: baseline; gap: 8px; padding: 0 18px 16px; }
+      .term-input-row .p { color: #4ade80; }
+      .term-input-row input {
+        flex: 1; background: transparent; border: 0; outline: 0; color: #e6ecdc;
+        font-family: var(--mono); font-size: 13.5px; min-height: 36px; padding: 0;
+        caret-color: #4ade80;
+      }
+      .term-hint { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); margin-top: 10px; }
+      .term-hint code { color: var(--ink-dim); }
+
+      /* ---------- stats ---------- */
+      .stats {
+        border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+        margin-top: 8px;
+      }
+      .stats .wrap {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+      }
+      .stat { padding: 26px 24px 24px 0; }
+      .stat + .stat { border-left: 1px solid var(--line); padding-left: 24px; }
+      .stat b {
+        font-family: var(--mono); font-weight: 500; font-size: 34px;
+        display: block; line-height: 1; color: var(--ink);
+      }
+      .stat b .plus { color: var(--accent); }
+      .stat span { font-size: 13px; color: var(--ink-dim); display: block; margin-top: 8px; }
+
+      /* ---------- sections ---------- */
+      section { padding: 72px 0 8px; }
+      .sec-head { display: flex; align-items: baseline; gap: 18px; margin-bottom: 34px; }
+      .sec-head .no { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+      .sec-head h2 {
+        font-family: var(--serif); font-weight: 500; font-size: clamp(30px, 4.5vw, 42px);
+        margin: 0; letter-spacing: -0.01em;
+      }
+      .sec-head .rule { flex: 1; border-top: 1px solid var(--line); transform: translateY(-6px); }
+
+      /* sub-blocks folded into a section (process inside About, focus
+         areas at the top of Work) — a quiet mono label instead of a
+         full numbered section head */
+      .sub-label {
+        font-family: var(--mono); font-size: 12.5px; font-weight: 500;
+        letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent);
+        margin: 0 0 18px;
+      }
+      .sub-block { margin-top: 54px; }
+      #work .filters { margin-top: 46px; }
+
+      .about-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 56px; }
+      .about-grid p { margin: 0 0 18px; font-size: 17px; line-height: 1.7; color: var(--ink); max-width: 36em; }
+      .about-grid p.dim { color: var(--ink-dim); }
+      .principles { list-style: none; margin: 0; padding: 0; font-size: 15px; }
+      .principles li {
+        padding: 13px 0; border-bottom: 1px solid var(--line);
+        display: flex; gap: 14px; align-items: baseline;
+      }
+      .principles li:first-child { padding-top: 2px; }
+      .principles .k { font-family: var(--mono); font-size: 12px; color: var(--accent); white-space: nowrap; }
+      .principles p { margin: 0; font-size: 15px; line-height: 1.55; }
+      .principles p b { font-weight: 600; display: block; }
+
+      /* focus rows */
+      .focus-list { border-top: 1px solid var(--line); }
+      .focus-row {
+        display: grid; grid-template-columns: 64px 1fr 1.2fr; gap: 24px;
+        padding: 22px 0; border-bottom: 1px solid var(--line); align-items: baseline;
+      }
+      .focus-row .idx { font-family: var(--mono); font-size: 13px; color: var(--ink-faint); }
+      .focus-row h3 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 0; }
+      .focus-row p { margin: 0; color: var(--ink-dim); font-size: 15px; line-height: 1.6; }
+      .focus-row .tags { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); margin-top: 6px; display: block; }
+
+      /* work log */
+      .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 22px; }
+      .filters button {
+        font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.03em;
+        background: transparent; color: var(--ink-dim);
+        border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+        padding: 7px 16px; min-height: 38px;
+      }
+      .filters button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+      .work-table { border-top: 1px solid var(--line); }
+      .work-row {
+        display: grid; grid-template-columns: 110px 1.1fr 1.6fr 130px; gap: 20px;
+        padding: 18px 0; border-bottom: 1px solid var(--line); align-items: baseline;
+      }
+      .work-row .when { font-family: var(--mono); font-size: 12.5px; color: var(--ink-faint); }
+      .work-row .prog { font-weight: 600; font-size: 15.5px; }
+      .work-row .what { color: var(--ink-dim); font-size: 14.5px; line-height: 1.55; }
+      .work-row .status { font-family: var(--mono); font-size: 12px; text-align: right; }
+      .status.s-paid { color: var(--accent); }
+      .status.s-review { color: var(--warn); }
+      .status.s-closed { color: var(--ink-faint); }
+      .work-row.hide { display: none; }
+      .work-empty { padding: 28px 0; color: var(--ink-faint); font-family: var(--mono); font-size: 13px; display: none; }
+
+      /* process */
+      .process { display: grid; grid-template-columns: repeat(4, 1fr); gap: 32px; }
+      .step .n { font-family: var(--mono); font-size: 13px; color: var(--accent); display: block; margin-bottom: 10px; }
+      .step h3 { font-family: var(--serif); font-size: 20px; font-weight: 500; margin: 0 0 8px; }
+      .step p { margin: 0; color: var(--ink-dim); font-size: 14.5px; line-height: 1.6; }
+
+      /* contact / footer */
+      footer { padding: 88px 0 40px; }
+      footer .big {
+        font-family: var(--serif); font-size: clamp(30px, 5vw, 48px); font-weight: 500;
+        line-height: 1.2; margin: 0 0 14px; max-width: 22em;
+      }
+      footer .big em { font-style: italic; color: var(--accent); }
+      footer .sub { color: var(--ink-dim); font-size: 16px; max-width: 34em; margin: 0 0 30px; }
+      .contact-links { display: flex; flex-wrap: wrap; gap: 12px; }
+      .contact-links a {
+        font-family: var(--mono); font-size: 13.5px; text-decoration: none;
+        color: var(--ink); border: 1px solid var(--line); border-radius: 8px;
+        padding: 12px 20px; min-height: 44px; display: inline-flex; align-items: center; gap: 8px;
+      }
+      .contact-links a:hover { border-color: var(--accent); color: var(--accent); }
+      .contact-links a.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; }
+      .contact-links a.primary:hover { color: var(--accent-ink); opacity: 0.88; }
+      .colophon {
+        margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line);
+        display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between;
+        font-family: var(--mono); font-size: 12px; color: var(--ink-faint);
+      }
+
+      /* ---------- footer tabs ---------- */
+      .ftab-list {
+        display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden;
+        margin-bottom: 34px;
+      }
+      .ftab-list button {
+        font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.04em;
+        background: transparent; color: var(--ink-dim); border: 0; cursor: pointer;
+        padding: 7px 18px; min-height: 38px;
+        display: inline-flex; align-items: center; gap: 8px;
+      }
+      .ftab-list button:hover { color: var(--ink); }
+      .ftab-list button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 500; }
+      .ftab-list button[aria-selected="true"]:hover { color: var(--accent-ink); }
+      .ftab-live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); display: inline-block; flex: none; }
+      .ftab-live-dot.up { background: var(--accent); animation: pulse 2.4s ease-in-out infinite; }
+      .ftab-live-dot.down { background: #e0655a; }
+      .ftab-list button[aria-selected="true"] .ftab-live-dot.up { background: var(--accent-ink); animation: none; }
+      .ftab-panel[hidden] { display: none; }
+
+      /* ---------- section nav (inside the top bar) ---------- */
+      /* Plain text links, one per page section, each jumping (smooth
+         scroll) to that section; the link for the section currently in
+         view is highlighted via aria-current. */
+      section, footer, header.hero { scroll-margin-top: 76px; }
+      .hnav-btn {
+        display: none; align-items: center; justify-content: center;
+        width: 44px; height: 44px; margin-left: auto; flex: none;
+        background: transparent; border: 1px solid var(--line); border-radius: 8px;
+        color: var(--ink); cursor: pointer; font-size: 19px; line-height: 1;
+      }
+      .hnav-btn:hover { border-color: var(--accent); color: var(--accent); }
+      .hnav-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .hnav-list {
+        display: flex; align-items: center; gap: 2px 15px; flex-wrap: nowrap;
+        overflow-x: auto; scrollbar-width: none;
+      }
+      @media (max-width: 1320px) {
+        /* make room for the single row: the clock steps aside first */
+        .statusbar .hide-sm { display: none; }
+      }
+      @media (max-width: 1080px) {
+        .hnav-list { gap: 2px 12px; }
+      }
+      .hnav-list::-webkit-scrollbar { display: none; }
+      .hnav-list a {
+        font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.02em;
+        color: var(--ink-dim); text-decoration: none; white-space: nowrap;
+        padding: 6px 0; min-height: 34px;
+        display: inline-flex; align-items: center;
+      }
+      .hnav-list a:hover { color: var(--ink); }
+      .hnav-list a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .hnav-list a[aria-current="true"] { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+      @media (max-width: 768px) {
+        section, footer, header.hero { scroll-margin-top: 68px; }
+        .statusbar .wrap { min-height: 52px; gap: 10px; flex-wrap: nowrap; }
+        .statusbar .wrap > span:first-child {
+          min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .statusbar .controls { gap: 6px; flex: none; }
+        .statusbar .seg button, .statusbar .theme-btn { padding: 4px 9px; min-height: 30px; }
+        .hnav-btn { display: inline-flex; }
+        .hnav-list {
+          display: none; position: absolute; top: 100%; left: 0; right: 0;
+          flex-direction: column; align-items: stretch; gap: 0;
+          background: var(--bg); border-bottom: 1px solid var(--line);
+          padding: 6px 0; overflow-x: visible;
+          box-shadow: 0 18px 30px rgba(0,0,0,0.25);
+        }
+        .hnav-list.open { display: flex; }
+        .hnav-list a {
+          padding: 10px 24px; min-height: 44px; font-size: 14px;
+        }
+        .hnav-list a[aria-current="true"] { box-shadow: inset 3px 0 0 var(--accent); }
+      }
+      .ft-agents { border-top: 1px solid var(--line); max-width: 760px; }
+      .ft-agent {
+        display: grid; grid-template-columns: 12px 110px 1fr auto auto; gap: 14px; align-items: baseline;
+        padding: 15px 0; border-bottom: 1px solid var(--line);
+      }
+      .ft-agent .agent-dot { align-self: center; }
+      .ft-agent.is-online .agent-dot { background: var(--accent); animation: pulse 2.4s ease-in-out infinite; }
+      .ft-agent.is-offline .agent-dot { background: #e0655a; animation: none; }
+      .ft-agent-name { font-family: var(--serif); font-size: 20px; font-weight: 500; }
+      .ft-agent-role { font-family: var(--mono); font-size: 12.5px; color: var(--accent); }
+      .ft-agent-status {
+        font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em;
+        text-transform: uppercase; color: var(--ink-faint);
+      }
+      .ft-agent.is-online .ft-agent-status { color: var(--accent); }
+      .ft-agent.is-offline .ft-agent-status { color: #e0655a; }
+      .ft-agent-seen { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+      .ft-agent-seen b { color: var(--ink-dim); font-weight: 500; }
+      .ft-agents-note { color: var(--ink-dim); font-size: 14.5px; max-width: 38em; margin: 20px 0 10px; }
+      .ft-agents-link { font-family: var(--mono); font-size: 12.5px; color: var(--accent); text-decoration: none; display: inline-block; padding: 6px 0; }
+      .ft-agents-link:hover { text-decoration: underline; }
+      @media (max-width: 640px) {
+        .ft-agent { grid-template-columns: 12px 1fr auto; gap: 6px 12px; }
+        .ft-agent-role { grid-column: 2; }
+        .ft-agent-seen { grid-column: 2; }
+        .ft-agent-status { grid-column: 3; grid-row: 1; }
+      }
+
+      /* ---------- footer on small screens ---------- */
+      /* On phones the footer was just more dark page after the agents
+         section: no top edge, no band, a small pill tab bar after 88px of
+         blank padding — at the end of a very long scroll it read as "no
+         footer", and with viewport-fit=cover and no safe-area padding
+         anywhere, its last line could sit under the phone's gesture bar.
+         Give it a full-bleed raised band, a full-width tab bar with real
+         tap targets, and safe-area bottom padding so the whole footer
+         reads as the footer and clears the device chrome. */
+      @media (max-width: 900px) {
+        footer {
+          margin: 24px -24px 0;
+          padding: 44px 24px calc(36px + env(safe-area-inset-bottom, 0px));
+          background: var(--bg-raise);
+          border-top: 1px solid var(--line);
+        }
+        .ftab-list { display: flex; width: 100%; margin-bottom: 28px; }
+        .ftab-list button { flex: 1; justify-content: center; min-height: 44px; font-size: 13.5px; }
+        footer .colophon { margin-top: 44px; }
+      }
+
+
+      /* ---------- data sync line ---------- */
+      .sync-line {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        max-width: 1120px; margin: 0 auto; padding: 12px 24px 14px;
+        font-family: var(--mono); font-size: 12px; color: var(--ink-faint);
+      }
+      .sync-line .dot {
+        width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); display: inline-block;
+      }
+      .sync-line.live .dot { background: var(--accent); animation: pulse 2.4s ease-in-out infinite; }
+      .sync-line button {
+        font-family: var(--mono); font-size: 12px; background: transparent; color: var(--ink-dim);
+        border: 1px solid var(--line); border-radius: 999px; cursor: pointer; padding: 4px 12px; min-height: 30px;
+      }
+      .sync-line button:hover { color: var(--accent); border-color: var(--accent); }
+
+      /* ---------- live tracker log ---------- */
+      .live-head {
+        display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+        margin: 44px 0 6px;
+      }
+      .live-head h3 { font-family: var(--serif); font-size: 21px; font-weight: 500; margin: 0; }
+      .live-head a { font-family: var(--mono); font-size: 12.5px; color: var(--accent); text-decoration: none; }
+      .live-head a:hover { text-decoration: underline; }
+      .live-row {
+        display: grid; grid-template-columns: 86px 150px 1fr auto; gap: 18px;
+        padding: 13px 0; border-bottom: 1px solid var(--line); align-items: baseline;
+      }
+      .live-row:first-child { border-top: 1px solid var(--line); }
+      .live-row .when { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
+      .live-row .prog { font-weight: 600; font-size: 14px; }
+      .live-row .title { color: var(--ink-dim); font-size: 14px; line-height: 1.5; }
+      .live-row .meta { font-family: var(--mono); font-size: 11.5px; text-align: right; white-space: nowrap; }
+      .live-row .sev { color: var(--ink-dim); margin-right: 10px; }
+      @media (max-width: 900px) {
+        .live-row { grid-template-columns: 1fr auto; gap: 4px 14px; }
+        .live-row .title { grid-column: 1 / -1; order: 3; }
+        .live-row .when { order: 4; }
+      }
+
+      /* ---------- live agents ---------- */
+      /* character mesh — the three agents as one connected crew */
+      .mesh {
+        border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+        padding: 6px 10px 2px; margin-bottom: 14px; overflow: hidden;
+      }
+      .mesh-svg { width: 100%; height: auto; display: block; }
+      .mesh-line { stroke: var(--accent-dim); stroke-width: 1.6; fill: none; stroke-dasharray: 5 7; animation: dashmove 16s linear infinite; }
+      .mesh-line-arc { stroke: var(--line); }
+      @keyframes dashmove { to { stroke-dashoffset: -240; } }
+      .mesh-link-label { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; fill: var(--ink-faint); }
+      .mesh-name { font-family: var(--serif); font-size: 21px; font-weight: 500; fill: var(--ink); }
+      .mesh-role { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; fill: var(--ink-faint); text-transform: uppercase; }
+      .mesh-node .badge { fill: var(--bg-raise); stroke: var(--line); stroke-width: 1.5; }
+      .mesh-node.is-online .badge { stroke: var(--accent-dim); }
+      .mesh-node .halo { fill: none; stroke: var(--accent); stroke-width: 1; opacity: 0; }
+      .mesh-node.is-online .halo { opacity: .45; animation: pulse 2.4s ease-in-out infinite; }
+      .mesh-node.is-offline .badge { stroke: #e0655a; }
+      .mesh-status-dot { fill: var(--ink-faint); }
+      .mesh-node.is-online .mesh-status-dot { fill: var(--accent); }
+      .mesh-node.is-offline .mesh-status-dot { fill: #e0655a; }
+      .mesh-caption {
+        display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
+        font-family: var(--mono); font-size: 12px; color: var(--ink-faint);
+        margin: 0 2px 20px;
+      }
+      .mesh-caption b { color: var(--accent); font-weight: 500; }
+      .agents-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; position: relative; }
+      @media (min-width: 901px) {
+        .agents-grid::before {
+          content: ""; position: absolute; top: 54px; left: 18%; right: 18%;
+          border-top: 2px dashed var(--accent-dim); opacity: .55; z-index: 0;
+        }
+        .agent-card { position: relative; z-index: 1; }
+      }
+      .agent-char { width: 62px; height: 62px; flex: none; }
+      .agent-char svg { width: 100%; height: 100%; display: block; }
+      .agent-char-img { width: 88px; height: 88px; }
+      .agent-char-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+      .agent-linked {
+        margin-top: 12px; font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint);
+        display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+      }
+      .agent-linked .arr { color: var(--accent); }
+      .agent-linked b { color: var(--ink-dim); font-weight: 500; }
+      .agent-card {
+        border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+        padding: 22px 22px 18px;
+      }
+      .agent-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+      .agent-dot {
+        width: 9px; height: 9px; border-radius: 50%; background: var(--ink-faint);
+        flex: none;
+      }
+      .agent-card.is-online .agent-dot { background: var(--accent); animation: pulse 2.4s ease-in-out infinite; }
+      .agent-card.is-offline .agent-dot { background: #e0655a; animation: none; }
+      .agent-status {
+        font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em;
+        text-transform: uppercase; color: var(--ink-faint); margin-left: auto;
+      }
+      .agent-card.is-online .agent-status { color: var(--accent); }
+      .agent-card.is-offline .agent-status { color: #e0655a; }
+      .agent-card h3 { font-family: var(--serif); font-size: 24px; font-weight: 500; margin: 0; }
+      .agent-card .agent-role { font-family: var(--mono); font-size: 12.5px; color: var(--accent); margin: 0 0 10px; }
+      .agent-card .agent-desc { margin: 0 0 14px; color: var(--ink-dim); font-size: 14.5px; line-height: 1.6; }
+      .agent-meta {
+        border-top: 1px solid var(--line); padding-top: 12px;
+        font-family: var(--mono); font-size: 12px; color: var(--ink-faint);
+        display: flex; flex-direction: column; gap: 4px;
+      }
+      .agent-meta b { color: var(--ink-dim); font-weight: 500; }
+      .agents-sync {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        margin-top: 18px; font-family: var(--mono); font-size: 12px; color: var(--ink-faint);
+      }
+      .agents-sync .dot {
+        width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); display: inline-block;
+      }
+      .agents-sync.live .dot { background: var(--accent); animation: pulse 2.4s ease-in-out infinite; }
+      .agents-sync button {
+        font-family: var(--mono); font-size: 12px; background: transparent; color: var(--ink-dim);
+        border: 1px solid var(--line); border-radius: 999px; cursor: pointer; padding: 4px 12px; min-height: 30px;
+      }
+      .agents-sync button:hover { color: var(--accent); border-color: var(--accent); }
+      @media (max-width: 900px) {
+        .agents-grid { grid-template-columns: 1fr; }
+      }
+
+      /* Sections are visible by default — entrance motion must never gate
+         content. The .reveal hook now only drives the stat counters. */
+      .reveal { opacity: 1; }
+
+      @media (max-width: 900px) {
+        .hero-grid, .about-grid { grid-template-columns: 1fr; gap: 40px; }
+        .stats .wrap { grid-template-columns: 1fr 1fr; }
+        .stat:nth-child(3) { border-left: 0; padding-left: 0; }
+        .stat { padding: 20px 16px 20px 0; }
+        .stat + .stat { padding-left: 16px; }
+        .process { grid-template-columns: 1fr 1fr; }
+        .focus-row { grid-template-columns: 40px 1fr; }
+        .focus-row p { grid-column: 2; }
+        .work-row { grid-template-columns: 1fr auto; gap: 6px 16px; }
+        .work-row .when { order: 3; }
+        .work-row .what { order: 4; grid-column: 1 / -1; }
+        .work-row .status { order: 2; }
+        .hero { padding: 48px 0 40px; }
+        section { padding: 56px 0 8px; }
+      }
+      @media (max-width: 520px) {
+        .process { grid-template-columns: 1fr; }
+        .term-body { height: 300px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="statusbar">
+      <div class="wrap">
+        <span class="status-open" title="Open to new programs"><span class="dot"></span><span data-i18n="status.open">Open</span></span>
+        <span class="hide-sm" id="clock">--:--:-- WIB</span>
+        <nav class="hnav-list" id="hnav-list" aria-label="Page sections / Bagian halaman">
+          <a href="#top" data-nav="top" aria-current="true"><span data-i18n="nav.top">Top</span></a>
+          <a href="#about" data-nav="about"><span data-i18n="nav.about">About</span></a>
+          <a href="#work" data-nav="work"><span data-i18n="nav.work">Work</span></a>
+          <a href="https://agent.reaper.my.id"><span data-i18n="nav.agents">Agents</span></a>
+          <a href="#contact" data-nav="contact"><span data-i18n="nav.contact">Contact</span></a>
+        </nav>
+        <span class="spacer"></span>
+        <div class="controls">
+          <div class="seg" role="group" aria-label="Language / Bahasa">
+            <button id="lang-en" aria-pressed="true">EN</button>
+            <button id="lang-id" aria-pressed="false">ID</button>
+          </div>
+          <button class="theme-btn" id="theme-btn" aria-label="Toggle theme">◐ <span data-i18n="theme.paper">paper</span></button>
+        </div>
+        <button class="hnav-btn" id="hnav-btn" type="button" aria-expanded="false" aria-controls="hnav-list" aria-label="Menu">
+          <span class="hnav-btn-icon" aria-hidden="true">☰</span>
+        </button>
+      </div>
+    </div>
+
+    <main class="wrap">
+      <!-- HERO -->
+      <header class="hero" id="top">
+        <div class="hero-grid">
+          <div>
+            <p class="role" data-i18n="hero.role">Security Researcher · Bug Bounty Hunter</p>
+            <h1 class="name">Reaper</h1>
+            <p class="lede" data-i18n="hero.lede">I break web apps, APIs, and smart contracts for a living — then write the report that gets them fixed. Independent researcher working public and self-hosted bounty programs, mostly where the scope is thin and the bugs are not.</p>
+            <div class="handles">
+              <a href="https://x.com/paraboyyyy" target="_blank" rel="noopener"><span>X</span>@paraboyyyy</a>
+              <a href="https://github.com/reaperads" target="_blank" rel="noopener"><span>GH</span>reaperads</a>
+              <a href="https://www.linkedin.com/in/agdaalif" target="_blank" rel="noopener"><span>IN</span>agdaalif</a>
+              <a href="https://t.me/holyinthefire" target="_blank" rel="noopener"><span>TG</span>@holyinthefire</a>
+            </div>
+          </div>
+
+          <div>
+            <div class="term" id="term">
+              <div class="term-head"><i></i><i></i><i></i><span>reaper — zsh</span></div>
+              <div class="term-body" id="term-body"></div>
+              <div class="term-input-row">
+                <span class="p">➜ ~</span>
+                <input id="term-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+                  aria-label="Terminal input" data-i18n-ph="term.ph" placeholder="type a command…" />
+              </div>
+            </div>
+            <p class="term-hint" data-i18n="term.hint">It answers. Try <code>help</code>, <code>whoami</code>, <code>work</code>, <code>contact</code>.</p>
+          </div>
+        </div>
+      </header>
+
+      <!-- STATS -->
+      <div class="stats reveal">
+        <div class="wrap" style="padding:0;">
+          <div class="stat"><b><span class="count" data-stat="programs">0</span></b><span data-i18n="stat.programs">programs tracked &amp; hunted</span></div>
+          <div class="stat"><b><span class="count" data-stat="reports">0</span></b><span data-i18n="stat.reports">reports filed</span></div>
+          <div class="stat"><b><span class="count" data-stat="active">0</span></b><span data-i18n="stat.active">programs active right now</span></div>
+          <div class="stat"><b><span class="count" data-stat="open">0</span></b><span data-i18n="stat.open">reports still in play</span></div>
+        </div>
+        <div class="sync-line" id="sync-line">
+          <span class="dot"></span><span id="sync-text">…</span>
+          <button id="sync-btn" type="button" data-i18n="data.refresh">Refresh</button>
+        </div>
+      </div>
+
+      <!-- ABOUT -->
+      <section id="about" class="reveal">
+        <div class="sec-head"><span class="no">01</span><h2 data-i18n="about.title">About</h2><span class="rule"></span></div>
+        <div class="about-grid">
+          <div>
+            <p data-i18n="about.p1">I'm an independent security researcher based in Indonesia. My work is bug bounty hunting in the literal sense: pick a program, read its code and traffic until something doesn't add up, prove it with a working proof of concept, and file a report a triager can act on without asking follow-up questions.</p>
+            <p class="dim" data-i18n="about.p2">Most of my time goes to self-hosted programs that never appear on the big platforms — found through dorks, public program lists, and watchers I run around the clock. The other half is Web3: protocol reviews where one wrong assumption in a contract is worth more than a hundred scanner findings.</p>
+          </div>
+          <ul class="principles">
+            <li><span class="k">R-01</span><p><b data-i18n="prin.1t">Proof or it didn't happen</b><span data-i18n="prin.1d">Every claim ships with a runnable PoC — a canary hit, a trace, a recording.</span></p></li>
+            <li><span class="k">R-02</span><p><b data-i18n="prin.2t">Scope first, always</b><span data-i18n="prin.2d">Permission and rules of engagement before the first request is sent.</span></p></li>
+            <li><span class="k">R-03</span><p><b data-i18n="prin.3t">Honest severity</b><span data-i18n="prin.3d">If the real impact is a DoS, the report says DoS — not account takeover.</span></p></li>
+            <li><span class="k">R-04</span><p><b data-i18n="prin.4t">One hypothesis at a time</b><span data-i18n="prin.4d">Gate-based validation: confirmed, falsified, or inconclusive. No spray and pray.</span></p></li>
+          </ul>
+        </div>
+        <div class="sub-block">
+          <h3 class="sub-label" data-i18n="proc.title">How I work</h3>
+          <div class="process">
+            <div class="step"><span class="n">step_01</span><h3 data-i18n="p1.t">Recon</h3><p data-i18n="p1.d">Map the program, the scope, and the stack. Watchers surface new targets; I pick the ones with thin coverage.</p></div>
+            <div class="step"><span class="n">step_02</span><h3 data-i18n="p2.t">Hypothesis</h3><p data-i18n="p2.d">One concrete claim about one component, written down before any testing starts.</p></div>
+            <div class="step"><span class="n">step_03</span><h3 data-i18n="p3.t">Validation</h3><p data-i18n="p3.d">Two-account proof, canary callbacks, measured impact. Confirmed, falsified, or inconclusive — all three are results.</p></div>
+            <div class="step"><span class="n">step_04</span><h3 data-i18n="p4.t">Report</h3><p data-i18n="p4.d">Reproduction steps, PoC attached, severity argued from evidence. Then I track the thread until it closes.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- WORK: focus areas first, then the selected-work log -->
+      <section id="work" class="reveal">
+        <div class="sec-head"><span class="no">02</span><h2 data-i18n="work.title">Selected work</h2><span class="rule"></span></div>
+        <h3 class="sub-label" data-i18n="focus.title">Where I dig</h3>
+        <div class="focus-list">
+          <div class="focus-row">
+            <span class="idx">/01</span>
+            <h3 data-i18n="f1.t">Server-side request forgery</h3>
+            <p><span data-i18n="f1.d">Unauthenticated endpoints that fetch what you tell them to. Canary-confirmed, with the honest limits of the port oracle stated in the report.</span><span class="tags">SSRF · canary · port oracle · metadata</span></p>
+          </div>
+          <div class="focus-row">
+            <span class="idx">/02</span>
+            <h3 data-i18n="f2.t">Access control &amp; session flaws</h3>
+            <p><span data-i18n="f2.d">Registration and session flows where one account quietly becomes another. Proven with two accounts, never with speculation.</span><span class="tags">IDOR · auth bypass · session takeover</span></p>
+          </div>
+          <div class="focus-row">
+            <span class="idx">/03</span>
+            <h3 data-i18n="f3.t">Smart contract logic</h3>
+            <p><span data-i18n="f3.d">Solana and EVM protocol review: fee-on-transfer accounting, unchecked depositors, credit that lands in the wrong account.</span><span class="tags">Solana · Foundry · PoC in .t.sol</span></p>
+          </div>
+          <div class="focus-row">
+            <span class="idx">/04</span>
+            <h3 data-i18n="f4.t">Parser &amp; library edge cases</h3>
+            <p><span data-i18n="f4.d">Deep in the dependency stack — crypto libraries that accept what their own threat model promises to reject, measured byte by byte.</span><span class="tags">OpenPGP · S2K · resource exhaustion</span></p>
+          </div>
+          <div class="focus-row">
+            <span class="idx">/05</span>
+            <h3 data-i18n="f5.t">Recon automation</h3>
+            <p><span data-i18n="f5.d">Watchers that poll program lists, dorks, and feeds every three hours and ping me when a new in-scope target appears.</span><span class="tags">dorks · RSS · code search · alerting</span></p>
+          </div>
+        </div>
+        <div class="filters" role="group" aria-label="Filter work">
+          <button data-filter="all" aria-pressed="true" data-i18n="flt.all">All</button>
+          <button data-filter="web2" aria-pressed="false">Web2</button>
+          <button data-filter="web3" aria-pressed="false">Web3</button>
+          <button data-filter="oss" aria-pressed="false" data-i18n="flt.oss">Open source</button>
+        </div>
+        <div class="work-table" id="work-table">
+          <div class="work-row" data-cat="web2">
+            <span class="when">2026-11</span>
+            <span class="prog">Liquid Web</span>
+            <span class="what" data-i18n="w1.d">Unauthenticated SSRF in a WordPress REST endpoint on the main site — canary-confirmed with loopback port probing, CVSS 5.3.</span>
+            <span class="status s-review" data-i18n="st.review">● in triage</span>
+          </div>
+          <div class="work-row" data-cat="web3">
+            <span class="when">2026-11</span>
+            <span class="prog">Relay</span>
+            <span class="what" data-i18n="w2.d">Three findings on the Solana bridge: unchecked depositor, fee-on-transfer inflation, shortfall credited to the wrong account.</span>
+            <span class="status s-review" data-i18n="st.progress">● in progress</span>
+          </div>
+          <div class="work-row" data-cat="oss">
+            <span class="when">2026-11</span>
+            <span class="prog">PGPainless</span>
+            <span class="what" data-i18n="w3.d">Argon2 S2K memory exhaustion: a 1.9 KB crafted key forces a 1 GiB allocation and OOM — verified live, heap measured.</span>
+            <span class="status s-review" data-i18n="st.ready">● ready to file</span>
+          </div>
+          <div class="work-row" data-cat="web2">
+            <span class="when">2026-11</span>
+            <span class="prog">Alaan</span>
+            <span class="what" data-i18n="w4.d">Registration-session takeover reported to the security team; acknowledged and under review.</span>
+            <span class="status s-review" data-i18n="st.review2">● in triage</span>
+          </div>
+          <div class="work-row" data-cat="oss">
+            <span class="when">2026-11</span>
+            <span class="prog">Neo N3</span>
+            <span class="what" data-i18n="w5.d">Private vulnerability report filed via GitHub advisory (GHSA) on a caching behaviour in the core client.</span>
+            <span class="status s-closed" data-i18n="st.closed">● closed</span>
+          </div>
+          <div class="work-row" data-cat="web2">
+            <span class="when">2026-11</span>
+            <span class="prog">Blockonomics</span>
+            <span class="what" data-i18n="w6.d">SSRF report filed and triaged — closed as a duplicate of an earlier finding.</span>
+            <span class="status s-closed" data-i18n="st.dup">● duplicate</span>
+          </div>
+          <div class="work-row" data-cat="web3">
+            <span class="when">2026-11</span>
+            <span class="prog">BrainChain</span>
+            <span class="what" data-i18n="w7.d">Contract bug hunt across two graded rounds — decisions reviewed directly with the founder.</span>
+            <span class="status s-closed" data-i18n="st.closed2">● closed</span>
+          </div>
+          <p class="work-empty" id="work-empty" data-i18n="work.empty">— nothing under this filter —</p>
+        </div>
+        <div class="live-head">
+          <h3 data-i18n="live.title">Latest from the tracker</h3>
+          <a href="https://tracker.reaper.my.id/" target="_blank" rel="noopener" data-i18n="live.all">Open the full tracker →</a>
+        </div>
+        <div id="live-log"></div>
+      </section>
+
+      <!-- CONTACT -->
+      <footer class="reveal" id="contact">
+        <div class="sec-head"><span class="no">03</span><h2 data-i18n="nav.contact">Contact</h2><span class="rule"></span></div>
+
+        <div>
+          <p class="big" data-i18n="contact.big">Running a program and want it <em>actually</em> tested?</p>
+          <p class="sub" data-i18n="contact.sub">I take on new public and private programs, and one-off protocol reviews. Fastest way to reach me is Telegram or X — I read every message myself.</p>
+          <div class="contact-links">
+            <a class="primary" href="https://t.me/holyinthefire" target="_blank" rel="noopener">Telegram — @holyinthefire</a>
+            <a href="https://x.com/paraboyyyy" target="_blank" rel="noopener">X — @paraboyyyy</a>
+            <a href="https://github.com/reaperads" target="_blank" rel="noopener">GitHub — reaperads</a>
+            <a href="https://www.linkedin.com/in/agdaalif" target="_blank" rel="noopener">LinkedIn — agdaalif</a>
+          </div>
+        </div>
+
+        <div class="colophon">
+          <span data-i18n="colo.left">© 2026 Reaper — Jakarta, ID</span>
+          <span data-i18n="colo.right">set in Newsreader &amp; IBM Plex Mono</span>
+        </div>
+      </footer>
+    </main>
+
+    <script>
+      /* Tracker data: live file first (data.json next to this page on
+         reaper.my.id, maintained from the tracker's initialData.json),
+         bundled snapshot as fallback. Every number on this page is
+         computed from this object at runtime — nothing is hardcoded. */
+      var FALLBACK_DATA = {"version":1,"isDemo":false,"updatedAt":"2026-11-15T04:30:41.802022+00:00","programs":[{"id":"p-planner5d","name":"Planner 5D","source":"Email · security@planner5d.com","status":"Aktif","scope":"planner5d.com · private project access","deadline":"","reviewDate":"2026-11-04","scopeChecked":"2026-11-04"},{"id":"p-velocity","name":"Velocity","source":"Email + PDF · security@velocity.exchange","status":"Aktif","scope":"velocity.exchange · perp keeper fee","deadline":"","reviewDate":"2026-11-02","scopeChecked":"2026-11-02"},{"id":"p-xe","name":"XE Network","source":"Form platform · bounty.xe.network","status":"Aktif","scope":"bounty.xe.network · rate limit + email link","deadline":"","reviewDate":"2026-11-04","scopeChecked":"2026-11-05"},{"id":"p-six","name":"SIX Group (HackerOne)","source":"HackerOne · HackerOne","status":"Selesai","scope":"HackerOne · SIX Group","deadline":"","reviewDate":"2026-11-04","scopeChecked":"2026-11-04"},{"id":"p-depipay","name":"DepiPay","source":"Email + PDF · security@depipay.com","status":"Aktif","scope":"depipay.com · invoices session gate","deadline":"2026-11-18","reviewDate":"2026-11-04","scopeChecked":"2026-11-04"},{"id":"p-gnoswap","name":"GnoSwap","source":"GitHub Advisory · GHSA-9pc2-8j4v-xcq9","status":"Aktif","scope":"gov/staker v1 · emission-mint fix","deadline":"","reviewDate":"2026-11-04","scopeChecked":"2026-11-04"},{"id":"p-dolomite","name":"Dolomite","source":"Email + PDF · security@dolomite.io","status":"Aktif","scope":"dolomite.io · ERC4626, oARB, VotingEscrow","deadline":"","reviewDate":"2026-11-07","scopeChecked":"2026-11-12"},{"id":"p-xsolla","name":"Xsolla","source":"Form program · help.xsolla.com/xsolla-bounty-program","status":"Selesai","scope":"help.xsolla.com · MFA + 80.lv bookmark","deadline":"","reviewDate":"2026-11-06","scopeChecked":"2026-11-13"},{"id":"p-khipuvault","name":"KhipuVault","source":"Email · security@khipuvault.com","status":"Aktif","scope":"khipuvault.com · IndividualPoolV3","deadline":"","reviewDate":"2026-11-06","scopeChecked":"2026-11-06"},{"id":"p-titan","name":"Titan Exchange (testnet)","source":"Google Form + feedback form · contact.titanx.cc","status":"Selesai","scope":"titanx.cc · CSV export (testnet)","deadline":"","reviewDate":"2026-11-07","scopeChecked":"2026-11-07"},{"id":"p-bwalletx","name":"bWalletX (b-Aware)","source":"Email · support@bwalletx.com","status":"Aktif","scope":"bwalletx.com · b-Aware program","deadline":"2026-11-24","reviewDate":"2026-11-13","scopeChecked":"2026-11-13"},{"id":"p-keeper","name":"Keeper Wallet","source":"Email · bugs@tonkeeper.com","status":"Aktif","scope":"Tonkeeper ext v26.6.1 · signData + battery","deadline":"","reviewDate":"2026-11-07","scopeChecked":"2026-11-07"},{"id":"p-gravifi","name":"GraviFi","source":"Email + PDF · team@gravifi.xyz","status":"Aktif","scope":"gravifi.xyz · Solana basket/vault","deadline":"","reviewDate":"2026-11-08","scopeChecked":"2026-11-08"},{"id":"p-relay","name":"Relay","source":"Email · support@relay.link","status":"Aktif","scope":"relay.link · Solana + EVM settlement","deadline":"2026-11-17","reviewDate":"2026-11-14","scopeChecked":"2026-11-14"},{"id":"p-blockonomics","name":"Blockonomics","source":"Freshdesk ticket · help.blockonomics.co","status":"Aktif","scope":"*.blockonomics.co · store callback SSRF","deadline":"","reviewDate":"2026-11-14","scopeChecked":"2026-11-14"},{"id":"p-runcloud","name":"RunCloud","source":"Email · bounty@runcloud.io / support@runcloud.io","status":"Aktif","scope":"*.runcloud.io · token lifetime + subdomain","deadline":"","reviewDate":"2026-11-14","scopeChecked":"2026-11-14"},{"id":"p-tori","name":"Tori Finance","source":"Email (plain text) · security@tori.finance","status":"Aktif","scope":"tori-contracts · minting + StakedTrUSD","deadline":"","reviewDate":"2026-11-15","scopeChecked":"2026-11-15"},{"id":"p-marginfi","name":"marginfi","source":"Email (plain text, no links) · security@mrgn.group","status":"Aktif","scope":"marginfi-v2 · Pyth oracle price","deadline":"2026-11-17","reviewDate":"2026-11-15","scopeChecked":"2026-11-15"},{"id":"p-ephemeral","name":"Ephemeral","source":"Email · devs@ephemeral.money","status":"Aktif","scope":"ephemeral.money · sweep-revert","deadline":"2026-11-15","reviewDate":"2026-11-12","scopeChecked":"2026-11-12"},{"id":"p-pubnub","name":"PubNub","source":"Email · support@pubnub.com","status":"Selesai","scope":"pubnub.com · C-core IV","deadline":"","reviewDate":"2026-11-13","scopeChecked":"2026-11-13"},{"id":"p-brainchain","name":"BrainChain","source":"Platform · -","status":"Selesai","scope":"BrainChain · Round 1 grading","deadline":"","reviewDate":"2026-11-13","scopeChecked":"2026-11-13"},{"id":"p-gardens","name":"Gardens","source":"GitHub Advisory · GHSA-x4p7-rv8v-vfvj","status":"Aktif","scope":"gardens-v2 · proposal-34 live","deadline":"","reviewDate":"2026-11-14","scopeChecked":"2026-11-14"},{"id":"p-quantus","name":"Quantus","source":"GitHub Advisory · GHSA-c848-83vj-3h2v","status":"Aktif","scope":"quantus · advisory triage","deadline":"2026-11-20","reviewDate":"2026-11-11","scopeChecked":"2026-11-11"},{"id":"p-yougame","name":"YouGame","source":"GitHub Advisory · GHSA-rmq6-6jpq-83c3","status":"Aktif","scope":"yougame · advisory draft","deadline":"","reviewDate":"2026-11-12","scopeChecked":"2026-11-12"},{"id":"p-coderabbit","name":"CodeRabbit (hunt)","source":"Hunt (tutup 15 Nov, 0 temuan) · security@coderabbit.ai","status":"Selesai","scope":"coderabbit.ai · hunt ditutup 15 Nov, 0 temuan","deadline":"","reviewDate":"2026-11-15","scopeChecked":"2026-11-15"}],"scopes":[{"id":"s1","programId":"p-runcloud","date":"2026-11-14","summary":"F-002 ditolak: forms.runcloud.io subdomain deprecated, out of scope, ineligible (penolakan ke-2 oleh Athul).","attention":true},{"id":"s2","programId":"p-marginfi","date":"2026-11-15","summary":"Repo pindah mrgnlabs/marginfi-v2 -> 0dotxyz/marginfi-v2. HEAD main masih 8665b8d (2026-11-07); bug masih ada.","attention":false},{"id":"s3","programId":"p-coderabbit","date":"2026-11-15","summary":"Hunt DITUTUP user ('kalau bakal dupe stop aja'). H1/H5/H6 falsified, H2/H4 blocked, H3 tidak dikejar. 0 temuan dilaporkan.","attention":false},{"id":"s4","programId":"p-gardens","date":"2026-11-14","summary":"Tim: jaga detail teknis tetap privat sampai coordinated disclosure. Proposal bounty dieksekusi sesuai urutan disclosure.","attention":true},{"id":"s5","programId":"p-bwalletx","date":"2026-11-13","summary":"C3 masih UNPATCHED di 5.2.54 (5 hari setelah laporan).","attention":true}],"reports":[{"id":"r01","programId":"p-planner5d","title":"Private Project Access via Editor Key URL","severity":"Info","status":"Triase","updated":"2026-11-02"},{"id":"r02","programId":"p-velocity","title":"Flat keeper fee double payout (perp), deployed commit d995bf96","severity":"Info","status":"Dikirim","updated":"2026-11-02"},{"id":"r03","programId":"p-xe","title":"Auth rate limits do not trigger (TOTP login & GitHub OAuth start, tidak pernah 429)","severity":"Low","status":"Dikirim","updated":"2026-11-04"},{"id":"r04","programId":"p-xe","title":"Email sign-in link — cabang alamat baru membuat akun reporter baru","severity":"Low","status":"Ditutup","updated":"2026-11-05"},{"id":"r05","programId":"p-six","title":"Password reflected in URL query parameters after failed login","severity":"Low","status":"Ditutup","updated":"2026-11-04"},{"id":"r06","programId":"p-six","title":"User enumeration via pesan 'The user is unknown.' pada password reset","severity":"Low","status":"Ditutup","updated":"2026-11-04"},{"id":"r07","programId":"p-depipay","title":"Invoices session-key gate signs with the wrong account (WalletConnect)","severity":"Low","status":"Dikirim","updated":"2026-11-04"},{"id":"r08","programId":"p-gnoswap","title":"Deployed gov/staker v1 missing the v1.1.0 emission-mint fix","severity":"Medium","status":"Dikirim","updated":"2026-11-04"},{"id":"r09","programId":"p-dolomite","title":"ERC4626 decimals issue","severity":"Low","status":"Perlu info","updated":"2026-11-07"},{"id":"r10","programId":"p-dolomite","title":"oARB vester zero-rate","severity":"Medium","status":"Perlu info","updated":"2026-11-07"},{"id":"r11","programId":"p-dolomite","title":"VotingEscrow — getPastVotes returns current delegation","severity":"Medium","status":"Perlu info","updated":"2026-11-12"},{"id":"r12","programId":"p-xsolla","title":"MFA cannot be enabled on a Login project — default MFA URL rejected as Invalid URL","severity":"Low","status":"Ditutup","updated":"2026-11-13"},{"id":"r13","programId":"p-xsolla","title":"80.lv article-page bookmark control does not persist","severity":"Low","status":"Ditutup","updated":"2026-11-13"},{"id":"r14","programId":"p-khipuvault","title":"A — Unbacked referral rewards in IndividualPoolV3 (referral mint-from-thin-air)","severity":"Medium","status":"Dikirim","updated":"2026-11-06"},{"id":"r15","programId":"p-khipuvault","title":"B — withdrawPartial dust-close orphans funds in IndividualPoolV3 (orphans 5 MUSD)","severity":"Low","status":"Dikirim","updated":"2026-11-06"},{"id":"r16","programId":"p-khipuvault","title":"C — compoundYields double-counts multi-vault yield (YieldAggregatorV3)","severity":"Medium","status":"Dikirim","updated":"2026-11-06"},{"id":"r17","programId":"p-khipuvault","title":"E — Mezo deposit always reverts (MezoIntegrationV3)","severity":"High","status":"Dikirim","updated":"2026-11-06"},{"id":"r18","programId":"p-titan","title":"Closed positions CSV export leaves side, size, entryPrice, leverage empty for every row","severity":"Info","status":"Selesai","updated":"2026-11-07"},{"id":"r19","programId":"p-bwalletx","title":"A1 — Cross-site sign relay via crossSiteSignGuard bypass","severity":"High","status":"Ditutup","updated":"2026-11-12"},{"id":"r20","programId":"p-bwalletx","title":"A2 — Approval sheet shows only first output + total; later recipients invisible","severity":"Medium","status":"Ditutup","updated":"2026-11-12"},{"id":"r21","programId":"p-bwalletx","title":"C3 — Storage auto-pay (HTTP 507) tanpa approval sheet/cap","severity":"Critical","status":"Diterima","updated":"2026-11-13"},{"id":"r22","programId":"p-keeper","title":"H2 — Hidden character (U+202E bidi override) in signData rendered invisibly, no warning (extension v26.6.1)","severity":"Low","status":"Dikirim","updated":"2026-11-07"},{"id":"r23","programId":"p-keeper","title":"Battery-balance gate blocks TON Connect-initiated sends (testnet-battery 403)","severity":"Medium","status":"Dikirim","updated":"2026-11-07"},{"id":"r24","programId":"p-gravifi","title":"Creator reweights a smart basket via stops","severity":"Medium","status":"Dikirim","updated":"2026-11-08"},{"id":"r25","programId":"p-relay","title":"F1 — Solana forwarder unchecked depositor (any signer, shared global PDA)","severity":"High","status":"Dikirim","updated":"2026-11-14"},{"id":"r26","programId":"p-relay","title":"F2 — Depository fee-on-transfer inflation","severity":"High","status":"Dikirim","updated":"2026-11-14"},{"id":"r27","programId":"p-relay","title":"F4 — Shortfall wrong-account credit","severity":"Medium","status":"Dikirim","updated":"2026-11-14"},{"id":"r28","programId":"p-blockonomics","title":"SSRF in store http_callback bypasses address filter, reaches cloud metadata (redirect bypass)","severity":"High","status":"Triase","updated":"2026-11-14"},{"id":"r29","programId":"p-runcloud","title":"F-001 — Unbounded API token lifetime (refresh chain, old token stays valid)","severity":"Medium","status":"Triase","updated":"2026-11-14"},{"id":"r30","programId":"p-runcloud","title":"F-002 — forms.runcloud.io subdomain takeover (CNAME ke Tally, cert expired)","severity":"High","status":"Ditutup","updated":"2026-11-14"},{"id":"r31","programId":"p-tori","title":"F-1 — ToriMinting verifyStablesLimit truncation (sub-1bp over-mint, stablesDeltaLimit=0)","severity":"Low","status":"Dikirim","updated":"2026-11-15"},{"id":"r32","programId":"p-tori","title":"F-2 — StakedTrUSD reportLoss cap base shrinkable via cooldownAssets","severity":"Low","status":"Dikirim","updated":"2026-11-15"},{"id":"r33","programId":"p-marginfi","title":"Unchecked Pyth exponent panics the price conversion (EXP_10_I80F48, price.rs:2668)","severity":"Low","status":"Dikirim","updated":"2026-11-15"},{"id":"r34","programId":"p-ephemeral","title":"H1 — (temuan pertama, duplikat)","severity":"Low","status":"Ditutup","updated":"2026-11-12"},{"id":"r35","programId":"p-ephemeral","title":"Report #2 — sweep-revert","severity":"Info","status":"Dikirim","updated":"2026-11-12"},{"id":"r36","programId":"p-pubnub","title":"C-core ACRH AES-256-CBC predictable IV via unseeded libc rand()","severity":"Info","status":"Ditutup","updated":"2026-11-13"},{"id":"r37","programId":"p-brainchain","title":"Round 1 — Decision 138 + Decision 214 (graded)","severity":"Info","status":"Ditutup","updated":"2026-11-13"},{"id":"r38","programId":"p-gardens","title":"GHSA-x4p7-rv8v-vfvj — (temuan diterima Medium)","severity":"Medium","status":"Diterima","updated":"2026-11-14"},{"id":"r39","programId":"p-quantus","title":"GHSA-c848-83vj-3h2v — (advisory privat)","severity":"Low","status":"Dikirim","updated":"2026-11-11"},{"id":"r40","programId":"p-yougame","title":"GHSA-rmq6-6jpq-83c3 — (advisory privat, draft)","severity":"High","status":"Dikirim","updated":"2026-11-12"}],"actions":[{"id":"a1","programId":"p-runcloud","title":"Putuskan redirect RunCloud: tunggu kuota lunarr@ vs kirim dari agdaalif@gmail.com","due":"","priority":"Tinggi","done":false},{"id":"a2","programId":"p-gardens","title":"Putuskan reporter credit Gardens (Accept/Decline)","due":"","priority":"Normal","done":false},{"id":"a3","programId":"p-depipay","title":"Siapkan draft follow-up DepiPay","due":"2026-11-18","priority":"Normal","done":false},{"id":"a4","programId":"p-dolomite","title":"Kirim POC Dolomite via Discord T-2563 (user kirim sendiri)","due":"","priority":"Normal","done":false},{"id":"a5","programId":"p-yougame","title":"Putuskan affected version + reporter credit YouGame","due":"","priority":"Normal","done":false}]};
+      var DATA = FALLBACK_DATA;
+      var DATA_LIVE = false;
+    </script>
+    <script>
+      /* ================= i18n ================= */
+      var I18N = {
+        en: {
+          "status.open": "Open",
+          "theme.paper": "paper", "theme.term": "terminal",
+          "hero.role": "Security Researcher · Bug Bounty Hunter",
+          "hero.lede": "I break web apps, APIs, and smart contracts for a living — then write the report that gets them fixed. Independent researcher working public and self-hosted bounty programs, mostly where the scope is thin and the bugs are not.",
+          "term.ph": "type a command…",
+          "term.hint": "It answers. Try <code>help</code>, <code>whoami</code>, <code>work</code>, <code>contact</code>.",
+          "stat.programs": "programs tracked & hunted",
+          "stat.reports": "reports filed",
+          "stat.active": "programs active right now",
+          "stat.open": "reports still in play",
+          "live.title": "Latest from the tracker",
+          "live.all": "Open the full tracker →",
+          "data.live": "Live tracker data",
+          "data.snap": "Tracker snapshot",
+          "data.updated": "updated",
+          "data.today": "today",
+          "data.daysago": "%d days ago",
+          "data.refresh": "Refresh",
+          "about.title": "About",
+          "about.p1": "I'm an independent security researcher based in Indonesia. My work is bug bounty hunting in the literal sense: pick a program, read its code and traffic until something doesn't add up, prove it with a working proof of concept, and file a report a triager can act on without asking follow-up questions.",
+          "about.p2": "Most of my time goes to self-hosted programs that never appear on the big platforms — found through dorks, public program lists, and watchers I run around the clock. The other half is Web3: protocol reviews where one wrong assumption in a contract is worth more than a hundred scanner findings.",
+          "prin.1t": "Proof or it didn't happen", "prin.1d": "Every claim ships with a runnable PoC — a canary hit, a trace, a recording.",
+          "prin.2t": "Scope first, always", "prin.2d": "Permission and rules of engagement before the first request is sent.",
+          "prin.3t": "Honest severity", "prin.3d": "If the real impact is a DoS, the report says DoS — not account takeover.",
+          "prin.4t": "One hypothesis at a time", "prin.4d": "Gate-based validation: confirmed, falsified, or inconclusive. No spray and pray.",
+          "focus.title": "Where I dig",
+          "f1.t": "Server-side request forgery", "f1.d": "Unauthenticated endpoints that fetch what you tell them to. Canary-confirmed, with the honest limits of the port oracle stated in the report.",
+          "f2.t": "Access control & session flaws", "f2.d": "Registration and session flows where one account quietly becomes another. Proven with two accounts, never with speculation.",
+          "f3.t": "Smart contract logic", "f3.d": "Solana and EVM protocol review: fee-on-transfer accounting, unchecked depositors, credit that lands in the wrong account.",
+          "f4.t": "Parser & library edge cases", "f4.d": "Deep in the dependency stack — crypto libraries that accept what their own threat model promises to reject, measured byte by byte.",
+          "f5.t": "Recon automation", "f5.d": "Watchers that poll program lists, dorks, and feeds every three hours and ping me when a new in-scope target appears.",
+          "work.title": "Selected work",
+          "flt.all": "All", "flt.oss": "Open source",
+          "w1.d": "Unauthenticated SSRF in a WordPress REST endpoint on the main site — canary-confirmed with loopback port probing, CVSS 5.3.",
+          "w2.d": "Three findings on the Solana bridge: unchecked depositor, fee-on-transfer inflation, shortfall credited to the wrong account.",
+          "w3.d": "Argon2 S2K memory exhaustion: a 1.9 KB crafted key forces a 1 GiB allocation and OOM — verified live, heap measured.",
+          "w4.d": "Registration-session takeover reported to the security team; acknowledged and under review.",
+          "w5.d": "Private vulnerability report filed via GitHub advisory (GHSA) on a caching behaviour in the core client.",
+          "w6.d": "SSRF report filed and triaged — closed as a duplicate of an earlier finding.",
+          "w7.d": "Contract bug hunt across two graded rounds — decisions reviewed directly with the founder.",
+          "st.review": "● in triage", "st.review2": "● in triage", "st.progress": "● in progress",
+          "st.ready": "● ready to file", "st.closed": "● closed", "st.closed2": "● closed", "st.dup": "● duplicate",
+          "work.empty": "— nothing under this filter —",
+          "proc.title": "How I work",
+          "p1.t": "Recon", "p1.d": "Map the program, the scope, and the stack. Watchers surface new targets; I pick the ones with thin coverage.",
+          "p2.t": "Hypothesis", "p2.d": "One concrete claim about one component, written down before any testing starts.",
+          "p3.t": "Validation", "p3.d": "Two-account proof, canary callbacks, measured impact. Confirmed, falsified, or inconclusive — all three are results.",
+          "p4.t": "Report", "p4.d": "Reproduction steps, PoC attached, severity argued from evidence. Then I track the thread until it closes.",
+          "agents.title": "Agents live now",
+          "agents.mesh": "One crew, wired together — Lunar hunts, Reaper tests in the sandbox, ran coordinates and reports. Nothing moves alone: every watcher, finding, and report flows along these lines.",
+          "ag.linked": "linked to",
+          "ag.ran.role": "Muse · main agent",
+          "ag.ran.desc": "The one you're talking to. Coordinates the hunts, keeps the tracker and this site in sync, and reports back here and on WhatsApp.",
+          "ag.lunar.role": "Hermes 1 · Tencent",
+          "ag.lunar.desc": "Always-on hunter on the Tencent box. Runs the bounty watchers and hunts new programs around the clock.",
+          "ag.hermes2.role": "Hermes 2 · Manus sandbox",
+          "ag.hermes2.desc": "The sandbox Hermes. Health-checked every 15 minutes — last check came back up at 11:43 WIB.",
+          "ag.host": "host", "ag.seen": "last check",
+          "ag.online": "online", "ag.offline": "offline", "ag.unknown": "unknown",
+          "agents.live": "Live agent status",
+          "agents.snap": "Agent status snapshot",
+          "nav.label": "Jump to section",
+          "nav.top": "Top", "nav.about": "About", "nav.focus": "Focus",
+          "nav.work": "Work", "nav.process": "Process", "nav.agents": "Agents", "nav.contact": "Contact",
+          "ftab.contact": "Contact",
+          "ftab.agents": "Agents",
+          "ftab.agentsNote": "The crew behind this site, checked every 15 minutes — Lunar hunts, Reaper tests in the sandbox, ran coordinates.",
+          "ftab.viewAgents": "Open the full agents section →",
+          "contact.big": "Running a program and want it <em>actually</em> tested?",
+          "contact.sub": "I take on new public and private programs, and one-off protocol reviews. Fastest way to reach me is Telegram or X — I read every message myself.",
+          "colo.left": "© 2026 Reaper — Jakarta, ID",
+          "colo.right": "set in Newsreader & IBM Plex Mono"
+        },
+        id: {
+          "status.open": "Terbuka",
+          "theme.paper": "kertas", "theme.term": "terminal",
+          "hero.role": "Peneliti Keamanan · Pemburu Bug Bounty",
+          "hero.lede": "Pekerjaan saya membobol aplikasi web, API, dan smart contract — lalu menulis laporan yang membuat mereka memperbaikinya. Peneliti independen yang mengerjakan program bounty publik dan self-hosted, terutama di tempat yang scope-nya tipis tapi bug-nya tidak.",
+          "term.ph": "ketik perintah…",
+          "term.hint": "Terminal ini menjawab. Coba <code>help</code>, <code>siapa</code>, <code>kerja</code>, <code>kontak</code>.",
+          "stat.programs": "program dilacak & diburu",
+          "stat.reports": "laporan terkirim",
+          "stat.active": "program aktif saat ini",
+          "stat.open": "laporan masih berjalan",
+          "live.title": "Terbaru dari tracker",
+          "live.all": "Buka tracker lengkap →",
+          "data.live": "Data tracker live",
+          "data.snap": "Snapshot tracker",
+          "data.updated": "diperbarui",
+          "data.today": "hari ini",
+          "data.daysago": "%d hari lalu",
+          "data.refresh": "Muat ulang",
+          "about.title": "Tentang",
+          "about.p1": "Saya peneliti keamanan independen yang berbasis di Indonesia. Kerja saya adalah bug bounty hunting dalam arti sebenarnya: pilih satu program, baca kode dan traffic-nya sampai ada yang tidak masuk akal, buktikan dengan proof of concept yang berjalan, lalu kirim laporan yang bisa langsung ditindaklanjuti triager tanpa perlu tanya balik.",
+          "about.p2": "Sebagian besar waktu saya habis di program self-hosted yang tidak pernah muncul di platform besar — ditemukan lewat dork, daftar program publik, dan watcher yang saya jalankan sepanjang waktu. Sisanya Web3: review protokol, di mana satu asumsi yang salah di sebuah kontrak nilainya melebihi seratus temuan scanner.",
+          "prin.1t": "Tanpa bukti, tidak terjadi", "prin.1d": "Setiap klaim dikirim dengan PoC yang bisa dijalankan — hit canary, trace, rekaman.",
+          "prin.2t": "Scope dulu, selalu", "prin.2d": "Izin dan rules of engagement sebelum request pertama dikirim.",
+          "prin.3t": "Severity yang jujur", "prin.3d": "Kalau dampak aslinya DoS, laporan menulis DoS — bukan account takeover.",
+          "prin.4t": "Satu hipotesis sekali jalan", "prin.4d": "Validasi berbasis gate: confirmed, falsified, atau inconclusive. Tidak ada spray and pray.",
+          "focus.title": "Di mana saya menggali",
+          "f1.t": "Server-side request forgery", "f1.d": "Endpoint tanpa autentikasi yang mengambil apa pun yang Anda suruh. Dikonfirmasi canary, dengan batas jujur port oracle-nya ditulis di laporan.",
+          "f2.t": "Celah access control & sesi", "f2.d": "Alur registrasi dan sesi di mana satu akun diam-diam menjadi akun lain. Dibuktikan dengan dua akun, tidak pernah dengan spekulasi.",
+          "f3.t": "Logika smart contract", "f3.d": "Review protokol Solana dan EVM: akuntansi fee-on-transfer, depositor tanpa pemeriksaan, kredit yang masuk ke akun yang salah.",
+          "f4.t": "Kasus tepi parser & library", "f4.d": "Jauh di dalam dependency stack — library kripto yang menerima apa yang threat model-nya sendiri berjanji untuk menolak, diukur byte demi byte.",
+          "f5.t": "Otomasi recon", "f5.d": "Watcher yang memeriksa daftar program, dork, dan feed setiap tiga jam dan mengabari saya saat target in-scope baru muncul.",
+          "work.title": "Pekerjaan pilihan",
+          "flt.all": "Semua", "flt.oss": "Open source",
+          "w1.d": "SSRF tanpa autentikasi di endpoint REST WordPress situs utama — dikonfirmasi canary dengan probing port loopback, CVSS 5.3.",
+          "w2.d": "Tiga temuan di bridge Solana: depositor tanpa pemeriksaan, inflasi fee-on-transfer, kekurangan dana dikreditkan ke akun yang salah.",
+          "w3.d": "Kehabisan memori lewat Argon2 S2K: key rekayasa 1,9 KB memaksa alokasi 1 GiB dan OOM — diverifikasi langsung, heap terukur.",
+          "w4.d": "Pengambilalihan sesi registrasi dilaporkan ke tim keamanan; sudah diakui dan sedang ditinjau.",
+          "w5.d": "Laporan kerentanan privat dikirim lewat GitHub advisory (GHSA) soal perilaku caching di core client.",
+          "w6.d": "Laporan SSRF dikirim dan ditriage — ditutup sebagai duplikat temuan yang lebih dulu masuk.",
+          "w7.d": "Perburuan bug kontrak dalam dua ronde penilaian — keputusan ditinjau langsung bersama founder-nya.",
+          "st.review": "● ditriage", "st.review2": "● ditriage", "st.progress": "● berjalan",
+          "st.ready": "● siap kirim", "st.closed": "● ditutup", "st.closed2": "● ditutup", "st.dup": "● duplikat",
+          "work.empty": "— tidak ada di filter ini —",
+          "proc.title": "Cara saya bekerja",
+          "p1.t": "Recon", "p1.d": "Petakan program, scope, dan stack-nya. Watcher memunculkan target baru; saya pilih yang cakupannya tipis.",
+          "p2.t": "Hipotesis", "p2.d": "Satu klaim konkret tentang satu komponen, ditulis sebelum pengujian dimulai.",
+          "p3.t": "Validasi", "p3.d": "Bukti dua akun, callback canary, dampak yang terukur. Confirmed, falsified, atau inconclusive — ketiganya hasil.",
+          "p4.t": "Laporan", "p4.d": "Langkah reproduksi, PoC terlampir, severity diperdebatkan dari bukti. Lalu thread-nya saya pantau sampai ditutup.",
+          "agents.title": "Agen yang lagi live",
+          "agents.mesh": "Satu tim, saling terhubung — Lunar memburu, Reaper menguji di sandbox, ran mengoordinasikan dan melapor. Tidak ada yang bergerak sendiri: setiap watcher, temuan, dan laporan mengalir lewat garis-garis ini.",
+          "ag.linked": "terhubung ke",
+          "ag.ran.role": "Muse · agen utama",
+          "ag.ran.desc": "Yang lagi ngobrol sama kamu. Mengoordinasikan perburuan, menjaga tracker dan situs ini tetap sinkron, dan melapor di sini dan di WhatsApp.",
+          "ag.lunar.role": "Hermes 1 · Tencent",
+          "ag.lunar.desc": "Pemburu yang selalu nyala di mesin Tencent. Menjalankan watcher bounty dan memburu program baru sepanjang waktu.",
+          "ag.hermes2.role": "Hermes 2 · Manus sandbox",
+          "ag.hermes2.desc": "Hermes di sandbox. Dicek kesehatannya tiap 15 menit — cek terakhir statusnya up pukul 11:43 WIB.",
+          "ag.host": "host", "ag.seen": "cek terakhir",
+          "ag.online": "online", "ag.offline": "offline", "ag.unknown": "tidak diketahui",
+          "agents.live": "Status agen live",
+          "agents.snap": "Snapshot status agen",
+          "nav.label": "Lompat ke bagian",
+          "nav.top": "Atas", "nav.about": "Tentang", "nav.focus": "Fokus",
+          "nav.work": "Pekerjaan", "nav.process": "Proses", "nav.agents": "Agen", "nav.contact": "Kontak",
+          "ftab.contact": "Kontak",
+          "ftab.agents": "Agen",
+          "ftab.agentsNote": "Tim di balik situs ini, dicek tiap 15 menit — Lunar memburu, Reaper menguji di sandbox, ran mengoordinasikan.",
+          "ftab.viewAgents": "Buka bagian agen lengkap →",
+          "contact.big": "Punya program dan ingin <em>benar-benar</em> diuji?",
+          "contact.sub": "Saya menerima program publik dan privat baru, serta review protokol sekali jalan. Cara tercepat menghubungi saya lewat Telegram atau X — semua pesan saya baca sendiri.",
+          "colo.left": "© 2026 Reaper — Jakarta, ID",
+          "colo.right": "ditetapkan dalam Newsreader & IBM Plex Mono"
+        }
+      };
+
+      var lang = "en";
+      function applyLang(l) {
+        lang = l;
+        document.documentElement.lang = (l === "id") ? "id" : "en";
+        var dict = I18N[l];
+        document.querySelectorAll("[data-i18n]").forEach(function (el) {
+          var k = el.getAttribute("data-i18n");
+          if (dict[k] !== undefined) el.innerHTML = dict[k];
+        });
+        document.querySelectorAll("[data-i18n-ph]").forEach(function (el) {
+          var k = el.getAttribute("data-i18n-ph");
+          if (dict[k] !== undefined) el.placeholder = dict[k];
+        });
+        if (typeof renderDataStatus === "function") renderDataStatus();
+        if (typeof renderLiveLog === "function") renderLiveLog();
+        if (typeof renderAgents === "function") renderAgents();
+        document.getElementById("lang-en").setAttribute("aria-pressed", l === "en" ? "true" : "false");
+        document.getElementById("lang-id").setAttribute("aria-pressed", l === "id" ? "true" : "false");
+        updateThemeLabel();
+      }
+      document.getElementById("lang-en").addEventListener("click", function () { applyLang("en"); });
+      document.getElementById("lang-id").addEventListener("click", function () { applyLang("id"); });
+
+      /* ================= theme ================= */
+      var themeBtn = document.getElementById("theme-btn");
+      function updateThemeLabel() {
+        var t = document.documentElement.getAttribute("data-theme");
+        var key = (t === "terminal") ? "theme.paper" : "theme.term";
+        themeBtn.querySelector("span").textContent = I18N[lang][key];
+      }
+      themeBtn.addEventListener("click", function () {
+        var t = document.documentElement.getAttribute("data-theme");
+        document.documentElement.setAttribute("data-theme", t === "terminal" ? "paper" : "terminal");
+        updateThemeLabel();
+      });
+
+      /* ================= clock (WIB) ================= */
+      var clockEl = document.getElementById("clock");
+      function tick() {
+        try {
+          var s = new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+          }).format(new Date());
+          clockEl.textContent = s + " WIB";
+        } catch (e) { clockEl.textContent = ""; }
+      }
+      tick(); setInterval(tick, 1000);
+
+      /* ================= dynamic tracker data ================= */
+      function statValues() {
+        var progs = (DATA && DATA.programs) || [], reps = (DATA && DATA.reports) || [];
+        var active = progs.filter(function (p) { return p.status === "Aktif"; }).length;
+        var open = reps.filter(function (r) { return r.status !== "Ditutup" && r.status !== "Selesai"; }).length;
+        return { programs: progs.length, reports: reps.length, active: active, open: open };
+      }
+      function progName(id) {
+        var ps = (DATA && DATA.programs) || [];
+        for (var i = 0; i < ps.length; i++) if (ps[i].id === id) return ps[i].name;
+        return id;
+      }
+      function fmtDate(iso) {
+        try {
+          return new Intl.DateTimeFormat(lang === "id" ? "id-ID" : "en-GB", {
+            timeZone: "Asia/Jakarta", day: "numeric", month: "short", year: "numeric"
+          }).format(new Date(iso));
+        } catch (e) { return String(iso).slice(0, 10); }
+      }
+      function statusClass(s) {
+        if (s === "Diterima") return "s-paid";
+        if (s === "Triase" || s === "Perlu info") return "s-review";
+        if (s === "Ditutup" || s === "Selesai") return "s-closed";
+        return "";
+      }
+      var STATUS_ID = { "Dikirim": "sent", "Triase": "in triage", "Ditutup": "closed", "Selesai": "done", "Diterima": "accepted", "Perlu info": "needs info" };
+      var STATUS_EN = { "Dikirim": "sent", "Triase": "in triage", "Ditutup": "closed", "Selesai": "done", "Diterima": "accepted", "Perlu info": "needs info" };
+      function statusLabel(s) {
+        if (lang === "id") return s;
+        return STATUS_EN[s] || s;
+      }
+      function renderLiveLog() {
+        var host = document.getElementById("live-log");
+        if (!host || !DATA || !DATA.reports) return;
+        var reps = DATA.reports.slice().sort(function (a, b) { return (b.updated || "") < (a.updated || "") ? -1 : 1; }).slice(0, 6);
+        host.innerHTML = "";
+        reps.forEach(function (r) {
+          var row = document.createElement("div");
+          row.className = "live-row";
+          var when = document.createElement("span"); when.className = "when"; when.textContent = r.updated || "";
+          var prog = document.createElement("span"); prog.className = "prog"; prog.textContent = progName(r.programId);
+          var title = document.createElement("span"); title.className = "title"; title.textContent = r.title || "";
+          var meta = document.createElement("span"); meta.className = "meta";
+          var sev = document.createElement("span"); sev.className = "sev"; sev.textContent = r.severity || "";
+          var st = document.createElement("span"); st.className = "status " + statusClass(r.status); st.textContent = "● " + statusLabel(r.status);
+          meta.appendChild(sev); meta.appendChild(st);
+          row.appendChild(when); row.appendChild(prog); row.appendChild(title); row.appendChild(meta);
+          host.appendChild(row);
+        });
+      }
+      function renderDataStatus() {
+        var lineEl = document.getElementById("sync-line"), txt = document.getElementById("sync-text");
+        if (!lineEl || !txt) return;
+        var d = I18N[lang];
+        var when = DATA && DATA.updatedAt ? new Date(DATA.updatedAt) : null;
+        var rel = "";
+        if (when && !isNaN(when)) {
+          var days = Math.floor((Date.now() - when.getTime()) / 86400000);
+          rel = days <= 0 ? d["data.today"] : d["data.daysago"].replace("%d", days);
+        }
+        txt.textContent = (DATA_LIVE ? d["data.live"] : d["data.snap"]) + " · " + d["data.updated"] + " " +
+          (when && !isNaN(when) ? fmtDate(DATA.updatedAt) : "—") + (rel ? " (" + rel + ")" : "");
+        lineEl.classList.toggle("live", DATA_LIVE);
+      }
+      function validData(j) {
+        return j && Object.prototype.toString.call(j.programs) === "[object Array]" &&
+               Object.prototype.toString.call(j.reports) === "[object Array]" && j.programs.length > 0;
+      }
+      function fetchJson(url) {
+        return fetch(url, { cache: "no-store" }).then(function (r) {
+          if (!r.ok) throw new Error("http " + r.status);
+          return r.json();
+        });
+      }
+      function syncLive() {
+        var urls = ["data.json", "data:application/json;base64,ewogICJ2ZXJzaW9uIjogMSwKICAiaXNEZW1vIjogZmFsc2UsCiAgInVwZGF0ZWRBdCI6ICIyMDI2LTExLTE1VDA0OjMwOjQxLjgwMjAyMiswMDowMCIsCiAgInByb2dyYW1zIjogWwogICAgewogICAgICAiaWQiOiAicC1wbGFubmVyNWQiLAogICAgICAibmFtZSI6ICJQbGFubmVyIDVEIiwKICAgICAgInNvdXJjZSI6ICJFbWFpbCDCtyBzZWN1cml0eUBwbGFubmVyNWQuY29tIiwKICAgICAgInN0YXR1cyI6ICJBa3RpZiIsCiAgICAgICJzY29wZSI6ICJwbGFubmVyNWQuY29tIMK3IHByaXZhdGUgcHJvamVjdCBhY2Nlc3MiLAogICAgICAiZGVhZGxpbmUiOiAiIiwKICAgICAgInJldmlld0RhdGUiOiAiMjAyNi0xMS0wNCIsCiAgICAgICJzY29wZUNoZWNrZWQiOiAiMjAyNi0xMS0wNCIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJwLXZlbG9jaXR5IiwKICAgICAgIm5hbWUiOiAiVmVsb2NpdHkiLAogICAgICAic291cmNlIjogIkVtYWlsICsgUERGIMK3IHNlY3VyaXR5QHZlbG9jaXR5LmV4Y2hhbmdlIiwKICAgICAgInN0YXR1cyI6ICJBa3RpZiIsCiAgICAgICJzY29wZSI6ICJ2ZWxvY2l0eS5leGNoYW5nZSDCtyBwZXJwIGtlZXBlciBmZWUiLAogICAgICAiZGVhZGxpbmUiOiAiIiwKICAgICAgInJldmlld0RhdGUiOiAiMjAyNi0xMS0wMiIsCiAgICAgICJzY29wZUNoZWNrZWQiOiAiMjAyNi0xMS0wMiIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJwLXhlIiwKICAgICAgIm5hbWUiOiAiWEUgTmV0d29yayIsCiAgICAgICJzb3VyY2UiOiAiRm9ybSBwbGF0Zm9ybSDCtyBib3VudHkueGUubmV0d29yayIsCiAgICAgICJzdGF0dXMiOiAiQWt0aWYiLAogICAgICAic2NvcGUiOiAiYm91bnR5LnhlLm5ldHdvcmsgwrcgcmF0ZSBsaW1pdCArIGVtYWlsIGxpbmsiLAogICAgICAiZGVhZGxpbmUiOiAiIiwKICAgICAgInJldmlld0RhdGUiOiAiMjAyNi0xMS0wNCIsCiAgICAgICJzY29wZUNoZWNrZWQiOiAiMjAyNi0xMS0wNSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJwLXNpeCIsCiAgICAgICJuYW1lIjogIlNJWCBHcm91cCAoSGFja2VyT25lKSIsCiAgICAgICJzb3VyY2UiOiAiSGFja2VyT25lIMK3IEhhY2tlck9uZSIsCiAgICAgICJzdGF0dXMiOiAiU2VsZXNhaSIsCiAgICAgICJzY29wZSI6ICJIYWNrZXJPbmUgwrcgU0lYIEdyb3VwIiwKICAgICAgImRlYWRsaW5lIjogIiIsCiAgICAgICJyZXZpZXdEYXRlIjogIjIwMjYtMTEtMDQiLAogICAgICAic2NvcGVDaGVja2VkIjogIjIwMjYtMTEtMDQiCiAgICB9LAogICAgewogICAgICAiaWQiOiAicC1kZXBpcGF5IiwKICAgICAgIm5hbWUiOiAiRGVwaVBheSIsCiAgICAgICJzb3VyY2UiOiAiRW1haWwgKyBQREYgwrcgc2VjdXJpdHlAZGVwaXBheS5jb20iLAogICAgICAic3RhdHVzIjogIkFrdGlmIiwKICAgICAgInNjb3BlIjogImRlcGlwYXkuY29tIMK3IGludm9pY2VzIHNlc3Npb24gZ2F0ZSIsCiAgICAgICJkZWFkbGluZSI6ICIyMDI2LTExLTE4IiwKICAgICAgInJldmlld0RhdGUiOiAiMjAyNi0xMS0wNCIsCiAgICAgICJzY29wZUNoZWNrZWQiOiAiMjAyNi0xMS0wNCIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJwLWdub3N3YXAiLAogICAgICAibmFtZSI6ICJHbm9Td2FwIiwKICAgICAgInNvdXJjZSI6ICJHaXRIdWIgQWR2aXNvcnkgwrcgR0hTQS05cGMyLThqNHYteGNxOSIsCiAgICAgICJzdGF0dXMiOiAiQWt0aWYiLAogICAgICAic2NvcGUiOiAiZ292L3N0YWtlciB2MSDCtyBlbWlzc2lvbi1taW50IGZpeCIsCiAgICAgICJkZWFkbGluZSI6ICIiLAogICAgICAicmV2aWV3RGF0ZSI6ICIyMDI2LTExLTA0IiwKICAgICAgInNjb3BlQ2hlY2tlZCI6ICIyMDI2LTExLTA0IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInAtZG9sb21pdGUiLAogICAgICAibmFtZSI6ICJEb2xvbWl0ZSIsCiAgICAgICJzb3VyY2UiOiAiRW1haWwgKyBQREYgwrcgc2VjdXJpdHlAZG9sb21pdGUuaW8iLAogICAgICAic3RhdHVzIjogIkFrdGlmIiwKICAgICAgInNjb3BlIjogImRvbG9taXRlLmlvIMK3IEVSQzQ2MjYsIG9BUkIsIFZvdGluZ0VzY3JvdyIsCiAgICAgICJkZWFkbGluZSI6ICIiLAogICAgICAicmV2aWV3RGF0ZSI6ICIyMDI2LTExLTA3IiwKICAgICAgInNjb3BlQ2hlY2tlZCI6ICIyMDI2LTExLTEyIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInAteHNvbGxhIiwKICAgICAgIm5hbWUiOiAiWHNvbGxhIiwKICAgICAgInNvdXJjZSI6ICJGb3JtIHByb2dyYW0gwrcgaGVscC54c29sbGEuY29tL3hzb2xsYS1ib3VudHktcHJvZ3JhbSIsCiAgICAgICJzdGF0dXMiOiAiU2VsZXNhaSIsCiAgICAgICJzY29wZSI6ICJoZWxwLnhzb2xsYS5jb20gwrcgTUZBICsgODAubHYgYm9va21hcmsiLAogICAgICAiZGVhZGxpbmUiOiAiIiwKICAgICAgInJldmlld0RhdGUiOiAiMjAyNi0xMS0wNiIsCiAgICAgICJzY29wZUNoZWNrZWQiOiAiMjAyNi0xMS0xMyIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJwLWtoaXB1dmF1bHQiLAogICAgICAibmFtZSI6ICJLaGlwdVZhdWx0IiwKICAgICAgInNvdXJjZSI6ICJFbWFpbCDCtyBzZWN1cml0eUBraGlwdXZhdWx0LmNvbSIsCiAgICAgICJzdGF0dXMiOiAiQWt0aWYiLAogICAgICAic2NvcGUiOiAia2hpcHV2YXVsdC5jb20gwrcgSW5kaXZpZHVhbFBvb2xWMyIsCiAgICAgICJkZWFkbGluZSI6ICIiLAogICAgICAicmV2aWV3RGF0ZSI6ICIyMDI2LTExLTA2IiwKICAgICAgInNjb3BlQ2hlY2tlZCI6ICIyMDI2LTExLTA2IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInAtdGl0YW4iLAogICAgICAibmFtZSI6ICJUaXRhbiBFeGNoYW5nZSAodGVzdG5ldCkiLAogICAgICAic291cmNlIjogIkdvb2dsZSBGb3JtICsgZmVlZGJhY2sgZm9ybSDCtyBjb250YWN0LnRpdGFueC5jYyIsCiAgICAgICJzdGF0dXMiOiAiU2VsZXNhaSIsCiAgICAgICJzY29wZSI6ICJ0aXRhbnguY2MgwrcgQ1NWIGV4cG9ydCAodGVzdG5ldCkiLAogICAgICAiZGVhZGxpbmUiOiAiIiwKICAgICAgInJldmlld0RhdGUiOiAiMjAyNi0xMS0wNyIsCiAgICAgICJzY29wZUNoZWNrZWQiOiAiMjAyNi0xMS0wNyIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJwLWJ3YWxsZXR4IiwKICAgICAgIm5hbWUiOiAiYldhbGxldFggKGItQXdhcmUpIiwKICAgICAgInNvdXJjZSI6ICJFbWFpbCDCtyBzdXBwb3J0QGJ3YWxsZXR4LmNvbSIsCiAgICAgICJzdGF0dXMiOiAiQWt0aWYiLAogICAgICAic2NvcGUiOiAiYndhbGxldHguY29tIMK3IGItQXdhcmUgcHJvZ3JhbSIsCiAgICAgICJkZWFkbGluZSI6ICIyMDI2LTExLTI0IiwKICAgICAgInJldmlld0RhdGUiOiAiMjAyNi0xMS0xMyIsCiAgICAgICJzY29wZUNoZWNrZWQiOiAiMjAyNi0xMS0xMyIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJwLWtlZXBlciIsCiAgICAgICJuYW1lIjogIktlZXBlciBXYWxsZXQiLAogICAgICAic291cmNlIjogIkVtYWlsIMK3IGJ1Z3NAdG9ua2VlcGVyLmNvbSIsCiAgICAgICJzdGF0dXMiOiAiQWt0aWYiLAogICAgICAic2NvcGUiOiAiVG9ua2VlcGVyIGV4dCB2MjYuNi4xIMK3IHNpZ25EYXRhICsgYmF0dGVyeSIsCiAgICAgICJkZWFkbGluZSI6ICIiLAogICAgICAicmV2aWV3RGF0ZSI6ICIyMDI2LTExLTA3IiwKICAgICAgInNjb3BlQ2hlY2tlZCI6ICIyMDI2LTExLTA3IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInAtZ3JhdmlmaSIsCiAgICAgICJuYW1lIjogIkdyYXZpRmkiLAogICAgICAic291cmNlIjogIkVtYWlsICsgUERGIMK3IHRlYW1AZ3JhdmlmaS54eXoiLAogICAgICAic3RhdHVzIjogIkFrdGlmIiwKICAgICAgInNjb3BlIjogImdyYXZpZmkueHl6IMK3IFNvbGFuYSBiYXNrZXQvdmF1bHQiLAogICAgICAiZGVhZGxpbmUiOiAiIiwKICAgICAgInJldmlld0RhdGUiOiAiMjAyNi0xMS0wOCIsCiAgICAgICJzY29wZUNoZWNrZWQiOiAiMjAyNi0xMS0wOCIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJwLXJlbGF5IiwKICAgICAgIm5hbWUiOiAiUmVsYXkiLAogICAgICAic291cmNlIjogIkVtYWlsIMK3IHN1cHBvcnRAcmVsYXkubGluayIsCiAgICAgICJzdGF0dXMiOiAiQWt0aWYiLAogICAgICAic2NvcGUiOiAicmVsYXkubGluayDCtyBTb2xhbmEgKyBFVk0gc2V0dGxlbWVudCIsCiAgICAgICJkZWFkbGluZSI6ICIyMDI2LTExLTE3IiwKICAgICAgInJldmlld0RhdGUiOiAiMjAyNi0xMS0xNCIsCiAgICAgICJzY29wZUNoZWNrZWQiOiAiMjAyNi0xMS0xNCIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJwLWJsb2Nrb25vbWljcyIsCiAgICAgICJuYW1lIjogIkJsb2Nrb25vbWljcyIsCiAgICAgICJzb3VyY2UiOiAiRnJlc2hkZXNrIHRpY2tldCDCtyBoZWxwLmJsb2Nrb25vbWljcy5jbyIsCiAgICAgICJzdGF0dXMiOiAiQWt0aWYiLAogICAgICAic2NvcGUiOiAiKi5ibG9ja29ub21pY3MuY28gwrcgc3RvcmUgY2FsbGJhY2sgU1NSRiIsCiAgICAgICJkZWFkbGluZSI6ICIiLAogICAgICAicmV2aWV3RGF0ZSI6ICIyMDI2LTExLTE0IiwKICAgICAgInNjb3BlQ2hlY2tlZCI6ICIyMDI2LTExLTE0IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInAtcnVuY2xvdWQiLAogICAgICAibmFtZSI6ICJSdW5DbG91ZCIsCiAgICAgICJzb3VyY2UiOiAiRW1haWwgwrcgYm91bnR5QHJ1bmNsb3VkLmlvIC8gc3VwcG9ydEBydW5jbG91ZC5pbyIsCiAgICAgICJzdGF0dXMiOiAiQWt0aWYiLAogICAgICAic2NvcGUiOiAiKi5ydW5jbG91ZC5pbyDCtyB0b2tlbiBsaWZldGltZSArIHN1YmRvbWFpbiIsCiAgICAgICJkZWFkbGluZSI6ICIiLAogICAgICAicmV2aWV3RGF0ZSI6ICIyMDI2LTExLTE0IiwKICAgICAgInNjb3BlQ2hlY2tlZCI6ICIyMDI2LTExLTE0IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInAtdG9yaSIsCiAgICAgICJuYW1lIjogIlRvcmkgRmluYW5jZSIsCiAgICAgICJzb3VyY2UiOiAiRW1haWwgKHBsYWluIHRleHQpIMK3IHNlY3VyaXR5QHRvcmkuZmluYW5jZSIsCiAgICAgICJzdGF0dXMiOiAiQWt0aWYiLAogICAgICAic2NvcGUiOiAidG9yaS1jb250cmFjdHMgwrcgbWludGluZyArIFN0YWtlZFRyVVNEIiwKICAgICAgImRlYWRsaW5lIjogIiIsCiAgICAgICJyZXZpZXdEYXRlIjogIjIwMjYtMTEtMTUiLAogICAgICAic2NvcGVDaGVja2VkIjogIjIwMjYtMTEtMTUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAicC1tYXJnaW5maSIsCiAgICAgICJuYW1lIjogIm1hcmdpbmZpIiwKICAgICAgInNvdXJjZSI6ICJFbWFpbCAocGxhaW4gdGV4dCwgbm8gbGlua3MpIMK3IHNlY3VyaXR5QG1yZ24uZ3JvdXAiLAogICAgICAic3RhdHVzIjogIkFrdGlmIiwKICAgICAgInNjb3BlIjogIm1hcmdpbmZpLXYyIMK3IFB5dGggb3JhY2xlIHByaWNlIiwKICAgICAgImRlYWRsaW5lIjogIjIwMjYtMTEtMTciLAogICAgICAicmV2aWV3RGF0ZSI6ICIyMDI2LTExLTE1IiwKICAgICAgInNjb3BlQ2hlY2tlZCI6ICIyMDI2LTExLTE1IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInAtZXBoZW1lcmFsIiwKICAgICAgIm5hbWUiOiAiRXBoZW1lcmFsIiwKICAgICAgInNvdXJjZSI6ICJFbWFpbCDCtyBkZXZzQGVwaGVtZXJhbC5tb25leSIsCiAgICAgICJzdGF0dXMiOiAiQWt0aWYiLAogICAgICAic2NvcGUiOiAiZXBoZW1lcmFsLm1vbmV5IMK3IHN3ZWVwLXJldmVydCIsCiAgICAgICJkZWFkbGluZSI6ICIyMDI2LTExLTE1IiwKICAgICAgInJldmlld0RhdGUiOiAiMjAyNi0xMS0xMiIsCiAgICAgICJzY29wZUNoZWNrZWQiOiAiMjAyNi0xMS0xMiIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJwLXB1Ym51YiIsCiAgICAgICJuYW1lIjogIlB1Yk51YiIsCiAgICAgICJzb3VyY2UiOiAiRW1haWwgwrcgc3VwcG9ydEBwdWJudWIuY29tIiwKICAgICAgInN0YXR1cyI6ICJTZWxlc2FpIiwKICAgICAgInNjb3BlIjogInB1Ym51Yi5jb20gwrcgQy1jb3JlIElWIiwKICAgICAgImRlYWRsaW5lIjogIiIsCiAgICAgICJyZXZpZXdEYXRlIjogIjIwMjYtMTEtMTMiLAogICAgICAic2NvcGVDaGVja2VkIjogIjIwMjYtMTEtMTMiCiAgICB9LAogICAgewogICAgICAiaWQiOiAicC1icmFpbmNoYWluIiwKICAgICAgIm5hbWUiOiAiQnJhaW5DaGFpbiIsCiAgICAgICJzb3VyY2UiOiAiUGxhdGZvcm0gwrcgLSIsCiAgICAgICJzdGF0dXMiOiAiU2VsZXNhaSIsCiAgICAgICJzY29wZSI6ICJCcmFpbkNoYWluIMK3IFJvdW5kIDEgZ3JhZGluZyIsCiAgICAgICJkZWFkbGluZSI6ICIiLAogICAgICAicmV2aWV3RGF0ZSI6ICIyMDI2LTExLTEzIiwKICAgICAgInNjb3BlQ2hlY2tlZCI6ICIyMDI2LTExLTEzIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInAtZ2FyZGVucyIsCiAgICAgICJuYW1lIjogIkdhcmRlbnMiLAogICAgICAic291cmNlIjogIkdpdEh1YiBBZHZpc29yeSDCtyBHSFNBLXg0cDctcnY4di12ZnZqIiwKICAgICAgInN0YXR1cyI6ICJBa3RpZiIsCiAgICAgICJzY29wZSI6ICJnYXJkZW5zLXYyIMK3IHByb3Bvc2FsLTM0IGxpdmUiLAogICAgICAiZGVhZGxpbmUiOiAiIiwKICAgICAgInJldmlld0RhdGUiOiAiMjAyNi0xMS0xNCIsCiAgICAgICJzY29wZUNoZWNrZWQiOiAiMjAyNi0xMS0xNCIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJwLXF1YW50dXMiLAogICAgICAibmFtZSI6ICJRdWFudHVzIiwKICAgICAgInNvdXJjZSI6ICJHaXRIdWIgQWR2aXNvcnkgwrcgR0hTQS1jODQ4LTgzdmotM2gydiIsCiAgICAgICJzdGF0dXMiOiAiQWt0aWYiLAogICAgICAic2NvcGUiOiAicXVhbnR1cyDCtyBhZHZpc29yeSB0cmlhZ2UiLAogICAgICAiZGVhZGxpbmUiOiAiMjAyNi0xMS0yMCIsCiAgICAgICJyZXZpZXdEYXRlIjogIjIwMjYtMTEtMTEiLAogICAgICAic2NvcGVDaGVja2VkIjogIjIwMjYtMTEtMTEiCiAgICB9LAogICAgewogICAgICAiaWQiOiAicC15b3VnYW1lIiwKICAgICAgIm5hbWUiOiAiWW91R2FtZSIsCiAgICAgICJzb3VyY2UiOiAiR2l0SHViIEFkdmlzb3J5IMK3IEdIU0Etcm1xNi02anBxLTgzYzMiLAogICAgICAic3RhdHVzIjogIkFrdGlmIiwKICAgICAgInNjb3BlIjogInlvdWdhbWUgwrcgYWR2aXNvcnkgZHJhZnQiLAogICAgICAiZGVhZGxpbmUiOiAiIiwKICAgICAgInJldmlld0RhdGUiOiAiMjAyNi0xMS0xMiIsCiAgICAgICJzY29wZUNoZWNrZWQiOiAiMjAyNi0xMS0xMiIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJwLWNvZGVyYWJiaXQiLAogICAgICAibmFtZSI6ICJDb2RlUmFiYml0IChodW50KSIsCiAgICAgICJzb3VyY2UiOiAiSHVudCAodHV0dXAgMTUgTm92LCAwIHRlbXVhbikgwrcgc2VjdXJpdHlAY29kZXJhYmJpdC5haSIsCiAgICAgICJzdGF0dXMiOiAiU2VsZXNhaSIsCiAgICAgICJzY29wZSI6ICJjb2RlcmFiYml0LmFpIMK3IGh1bnQgZGl0dXR1cCAxNSBOb3YsIDAgdGVtdWFuIiwKICAgICAgImRlYWRsaW5lIjogIiIsCiAgICAgICJyZXZpZXdEYXRlIjogIjIwMjYtMTEtMTUiLAogICAgICAic2NvcGVDaGVja2VkIjogIjIwMjYtMTEtMTUiCiAgICB9CiAgXSwKICAic2NvcGVzIjogWwogICAgewogICAgICAiaWQiOiAiczEiLAogICAgICAicHJvZ3JhbUlkIjogInAtcnVuY2xvdWQiLAogICAgICAiZGF0ZSI6ICIyMDI2LTExLTE0IiwKICAgICAgInN1bW1hcnkiOiAiRi0wMDIgZGl0b2xhazogZm9ybXMucnVuY2xvdWQuaW8gc3ViZG9tYWluIGRlcHJlY2F0ZWQsIG91dCBvZiBzY29wZSwgaW5lbGlnaWJsZSAocGVub2xha2FuIGtlLTIgb2xlaCBBdGh1bCkuIiwKICAgICAgImF0dGVudGlvbiI6IHRydWUKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJzMiIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1tYXJnaW5maSIsCiAgICAgICJkYXRlIjogIjIwMjYtMTEtMTUiLAogICAgICAic3VtbWFyeSI6ICJSZXBvIHBpbmRhaCBtcmdubGFicy9tYXJnaW5maS12MiAtPiAwZG90eHl6L21hcmdpbmZpLXYyLiBIRUFEIG1haW4gbWFzaWggODY2NWI4ZCAoMjAyNi0xMS0wNyk7IGJ1ZyBtYXNpaCBhZGEuIiwKICAgICAgImF0dGVudGlvbiI6IGZhbHNlCiAgICB9LAogICAgewogICAgICAiaWQiOiAiczMiLAogICAgICAicHJvZ3JhbUlkIjogInAtY29kZXJhYmJpdCIsCiAgICAgICJkYXRlIjogIjIwMjYtMTEtMTUiLAogICAgICAic3VtbWFyeSI6ICJIdW50IERJVFVUVVAgdXNlciAoJ2thbGF1IGJha2FsIGR1cGUgc3RvcCBhamEnKS4gSDEvSDUvSDYgZmFsc2lmaWVkLCBIMi9INCBibG9ja2VkLCBIMyB0aWRhayBkaWtlamFyLiAwIHRlbXVhbiBkaWxhcG9ya2FuLiIsCiAgICAgICJhdHRlbnRpb24iOiBmYWxzZQogICAgfSwKICAgIHsKICAgICAgImlkIjogInM0IiwKICAgICAgInByb2dyYW1JZCI6ICJwLWdhcmRlbnMiLAogICAgICAiZGF0ZSI6ICIyMDI2LTExLTE0IiwKICAgICAgInN1bW1hcnkiOiAiVGltOiBqYWdhIGRldGFpbCB0ZWtuaXMgdGV0YXAgcHJpdmF0IHNhbXBhaSBjb29yZGluYXRlZCBkaXNjbG9zdXJlLiBQcm9wb3NhbCBib3VudHkgZGlla3Nla3VzaSBzZXN1YWkgdXJ1dGFuIGRpc2Nsb3N1cmUuIiwKICAgICAgImF0dGVudGlvbiI6IHRydWUKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJzNSIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1id2FsbGV0eCIsCiAgICAgICJkYXRlIjogIjIwMjYtMTEtMTMiLAogICAgICAic3VtbWFyeSI6ICJDMyBtYXNpaCBVTlBBVENIRUQgZGkgNS4yLjU0ICg1IGhhcmkgc2V0ZWxhaCBsYXBvcmFuKS4iLAogICAgICAiYXR0ZW50aW9uIjogdHJ1ZQogICAgfQogIF0sCiAgInJlcG9ydHMiOiBbCiAgICB7CiAgICAgICJpZCI6ICJyMDEiLAogICAgICAicHJvZ3JhbUlkIjogInAtcGxhbm5lcjVkIiwKICAgICAgInRpdGxlIjogIlByaXZhdGUgUHJvamVjdCBBY2Nlc3MgdmlhIEVkaXRvciBLZXkgVVJMIiwKICAgICAgInNldmVyaXR5IjogIkluZm8iLAogICAgICAic3RhdHVzIjogIlRyaWFzZSIsCiAgICAgICJ1cGRhdGVkIjogIjIwMjYtMTEtMDIiCiAgICB9LAogICAgewogICAgICAiaWQiOiAicjAyIiwKICAgICAgInByb2dyYW1JZCI6ICJwLXZlbG9jaXR5IiwKICAgICAgInRpdGxlIjogIkZsYXQga2VlcGVyIGZlZSBkb3VibGUgcGF5b3V0IChwZXJwKSwgZGVwbG95ZWQgY29tbWl0IGQ5OTViZjk2IiwKICAgICAgInNldmVyaXR5IjogIkluZm8iLAogICAgICAic3RhdHVzIjogIkRpa2lyaW0iLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTAyIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIwMyIsCiAgICAgICJwcm9ncmFtSWQiOiAicC14ZSIsCiAgICAgICJ0aXRsZSI6ICJBdXRoIHJhdGUgbGltaXRzIGRvIG5vdCB0cmlnZ2VyIChUT1RQIGxvZ2luICYgR2l0SHViIE9BdXRoIHN0YXJ0LCB0aWRhayBwZXJuYWggNDI5KSIsCiAgICAgICJzZXZlcml0eSI6ICJMb3ciLAogICAgICAic3RhdHVzIjogIkRpa2lyaW0iLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTA0IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIwNCIsCiAgICAgICJwcm9ncmFtSWQiOiAicC14ZSIsCiAgICAgICJ0aXRsZSI6ICJFbWFpbCBzaWduLWluIGxpbmsg4oCUIGNhYmFuZyBhbGFtYXQgYmFydSBtZW1idWF0IGFrdW4gcmVwb3J0ZXIgYmFydSIsCiAgICAgICJzZXZlcml0eSI6ICJMb3ciLAogICAgICAic3RhdHVzIjogIkRpdHV0dXAiLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTA1IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIwNSIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1zaXgiLAogICAgICAidGl0bGUiOiAiUGFzc3dvcmQgcmVmbGVjdGVkIGluIFVSTCBxdWVyeSBwYXJhbWV0ZXJzIGFmdGVyIGZhaWxlZCBsb2dpbiIsCiAgICAgICJzZXZlcml0eSI6ICJMb3ciLAogICAgICAic3RhdHVzIjogIkRpdHV0dXAiLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTA0IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIwNiIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1zaXgiLAogICAgICAidGl0bGUiOiAiVXNlciBlbnVtZXJhdGlvbiB2aWEgcGVzYW4gJ1RoZSB1c2VyIGlzIHVua25vd24uJyBwYWRhIHBhc3N3b3JkIHJlc2V0IiwKICAgICAgInNldmVyaXR5IjogIkxvdyIsCiAgICAgICJzdGF0dXMiOiAiRGl0dXR1cCIsCiAgICAgICJ1cGRhdGVkIjogIjIwMjYtMTEtMDQiCiAgICB9LAogICAgewogICAgICAiaWQiOiAicjA3IiwKICAgICAgInByb2dyYW1JZCI6ICJwLWRlcGlwYXkiLAogICAgICAidGl0bGUiOiAiSW52b2ljZXMgc2Vzc2lvbi1rZXkgZ2F0ZSBzaWducyB3aXRoIHRoZSB3cm9uZyBhY2NvdW50IChXYWxsZXRDb25uZWN0KSIsCiAgICAgICJzZXZlcml0eSI6ICJMb3ciLAogICAgICAic3RhdHVzIjogIkRpa2lyaW0iLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTA0IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIwOCIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1nbm9zd2FwIiwKICAgICAgInRpdGxlIjogIkRlcGxveWVkIGdvdi9zdGFrZXIgdjEgbWlzc2luZyB0aGUgdjEuMS4wIGVtaXNzaW9uLW1pbnQgZml4IiwKICAgICAgInNldmVyaXR5IjogIk1lZGl1bSIsCiAgICAgICJzdGF0dXMiOiAiRGlraXJpbSIsCiAgICAgICJ1cGRhdGVkIjogIjIwMjYtMTEtMDQiCiAgICB9LAogICAgewogICAgICAiaWQiOiAicjA5IiwKICAgICAgInByb2dyYW1JZCI6ICJwLWRvbG9taXRlIiwKICAgICAgInRpdGxlIjogIkVSQzQ2MjYgZGVjaW1hbHMgaXNzdWUiLAogICAgICAic2V2ZXJpdHkiOiAiTG93IiwKICAgICAgInN0YXR1cyI6ICJQZXJsdSBpbmZvIiwKICAgICAgInVwZGF0ZWQiOiAiMjAyNi0xMS0wNyIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJyMTAiLAogICAgICAicHJvZ3JhbUlkIjogInAtZG9sb21pdGUiLAogICAgICAidGl0bGUiOiAib0FSQiB2ZXN0ZXIgemVyby1yYXRlIiwKICAgICAgInNldmVyaXR5IjogIk1lZGl1bSIsCiAgICAgICJzdGF0dXMiOiAiUGVybHUgaW5mbyIsCiAgICAgICJ1cGRhdGVkIjogIjIwMjYtMTEtMDciCiAgICB9LAogICAgewogICAgICAiaWQiOiAicjExIiwKICAgICAgInByb2dyYW1JZCI6ICJwLWRvbG9taXRlIiwKICAgICAgInRpdGxlIjogIlZvdGluZ0VzY3JvdyDigJQgZ2V0UGFzdFZvdGVzIHJldHVybnMgY3VycmVudCBkZWxlZ2F0aW9uIiwKICAgICAgInNldmVyaXR5IjogIk1lZGl1bSIsCiAgICAgICJzdGF0dXMiOiAiUGVybHUgaW5mbyIsCiAgICAgICJ1cGRhdGVkIjogIjIwMjYtMTEtMTIiCiAgICB9LAogICAgewogICAgICAiaWQiOiAicjEyIiwKICAgICAgInByb2dyYW1JZCI6ICJwLXhzb2xsYSIsCiAgICAgICJ0aXRsZSI6ICJNRkEgY2Fubm90IGJlIGVuYWJsZWQgb24gYSBMb2dpbiBwcm9qZWN0IOKAlCBkZWZhdWx0IE1GQSBVUkwgcmVqZWN0ZWQgYXMgSW52YWxpZCBVUkwiLAogICAgICAic2V2ZXJpdHkiOiAiTG93IiwKICAgICAgInN0YXR1cyI6ICJEaXR1dHVwIiwKICAgICAgInVwZGF0ZWQiOiAiMjAyNi0xMS0xMyIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJyMTMiLAogICAgICAicHJvZ3JhbUlkIjogInAteHNvbGxhIiwKICAgICAgInRpdGxlIjogIjgwLmx2IGFydGljbGUtcGFnZSBib29rbWFyayBjb250cm9sIGRvZXMgbm90IHBlcnNpc3QiLAogICAgICAic2V2ZXJpdHkiOiAiTG93IiwKICAgICAgInN0YXR1cyI6ICJEaXR1dHVwIiwKICAgICAgInVwZGF0ZWQiOiAiMjAyNi0xMS0xMyIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJyMTQiLAogICAgICAicHJvZ3JhbUlkIjogInAta2hpcHV2YXVsdCIsCiAgICAgICJ0aXRsZSI6ICJBIOKAlCBVbmJhY2tlZCByZWZlcnJhbCByZXdhcmRzIGluIEluZGl2aWR1YWxQb29sVjMgKHJlZmVycmFsIG1pbnQtZnJvbS10aGluLWFpcikiLAogICAgICAic2V2ZXJpdHkiOiAiTWVkaXVtIiwKICAgICAgInN0YXR1cyI6ICJEaWtpcmltIiwKICAgICAgInVwZGF0ZWQiOiAiMjAyNi0xMS0wNiIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJyMTUiLAogICAgICAicHJvZ3JhbUlkIjogInAta2hpcHV2YXVsdCIsCiAgICAgICJ0aXRsZSI6ICJCIOKAlCB3aXRoZHJhd1BhcnRpYWwgZHVzdC1jbG9zZSBvcnBoYW5zIGZ1bmRzIGluIEluZGl2aWR1YWxQb29sVjMgKG9ycGhhbnMgNSBNVVNEKSIsCiAgICAgICJzZXZlcml0eSI6ICJMb3ciLAogICAgICAic3RhdHVzIjogIkRpa2lyaW0iLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTA2IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIxNiIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1raGlwdXZhdWx0IiwKICAgICAgInRpdGxlIjogIkMg4oCUIGNvbXBvdW5kWWllbGRzIGRvdWJsZS1jb3VudHMgbXVsdGktdmF1bHQgeWllbGQgKFlpZWxkQWdncmVnYXRvclYzKSIsCiAgICAgICJzZXZlcml0eSI6ICJNZWRpdW0iLAogICAgICAic3RhdHVzIjogIkRpa2lyaW0iLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTA2IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIxNyIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1raGlwdXZhdWx0IiwKICAgICAgInRpdGxlIjogIkUg4oCUIE1lem8gZGVwb3NpdCBhbHdheXMgcmV2ZXJ0cyAoTWV6b0ludGVncmF0aW9uVjMpIiwKICAgICAgInNldmVyaXR5IjogIkhpZ2giLAogICAgICAic3RhdHVzIjogIkRpa2lyaW0iLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTA2IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIxOCIsCiAgICAgICJwcm9ncmFtSWQiOiAicC10aXRhbiIsCiAgICAgICJ0aXRsZSI6ICJDbG9zZWQgcG9zaXRpb25zIENTViBleHBvcnQgbGVhdmVzIHNpZGUsIHNpemUsIGVudHJ5UHJpY2UsIGxldmVyYWdlIGVtcHR5IGZvciBldmVyeSByb3ciLAogICAgICAic2V2ZXJpdHkiOiAiSW5mbyIsCiAgICAgICJzdGF0dXMiOiAiU2VsZXNhaSIsCiAgICAgICJ1cGRhdGVkIjogIjIwMjYtMTEtMDciCiAgICB9LAogICAgewogICAgICAiaWQiOiAicjE5IiwKICAgICAgInByb2dyYW1JZCI6ICJwLWJ3YWxsZXR4IiwKICAgICAgInRpdGxlIjogIkExIOKAlCBDcm9zcy1zaXRlIHNpZ24gcmVsYXkgdmlhIGNyb3NzU2l0ZVNpZ25HdWFyZCBieXBhc3MiLAogICAgICAic2V2ZXJpdHkiOiAiSGlnaCIsCiAgICAgICJzdGF0dXMiOiAiRGl0dXR1cCIsCiAgICAgICJ1cGRhdGVkIjogIjIwMjYtMTEtMTIiCiAgICB9LAogICAgewogICAgICAiaWQiOiAicjIwIiwKICAgICAgInByb2dyYW1JZCI6ICJwLWJ3YWxsZXR4IiwKICAgICAgInRpdGxlIjogIkEyIOKAlCBBcHByb3ZhbCBzaGVldCBzaG93cyBvbmx5IGZpcnN0IG91dHB1dCArIHRvdGFsOyBsYXRlciByZWNpcGllbnRzIGludmlzaWJsZSIsCiAgICAgICJzZXZlcml0eSI6ICJNZWRpdW0iLAogICAgICAic3RhdHVzIjogIkRpdHV0dXAiLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTEyIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIyMSIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1id2FsbGV0eCIsCiAgICAgICJ0aXRsZSI6ICJDMyDigJQgU3RvcmFnZSBhdXRvLXBheSAoSFRUUCA1MDcpIHRhbnBhIGFwcHJvdmFsIHNoZWV0L2NhcCIsCiAgICAgICJzZXZlcml0eSI6ICJDcml0aWNhbCIsCiAgICAgICJzdGF0dXMiOiAiRGl0ZXJpbWEiLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTEzIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIyMiIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1rZWVwZXIiLAogICAgICAidGl0bGUiOiAiSDIg4oCUIEhpZGRlbiBjaGFyYWN0ZXIgKFUrMjAyRSBiaWRpIG92ZXJyaWRlKSBpbiBzaWduRGF0YSByZW5kZXJlZCBpbnZpc2libHksIG5vIHdhcm5pbmcgKGV4dGVuc2lvbiB2MjYuNi4xKSIsCiAgICAgICJzZXZlcml0eSI6ICJMb3ciLAogICAgICAic3RhdHVzIjogIkRpa2lyaW0iLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTA3IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIyMyIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1rZWVwZXIiLAogICAgICAidGl0bGUiOiAiQmF0dGVyeS1iYWxhbmNlIGdhdGUgYmxvY2tzIFRPTiBDb25uZWN0LWluaXRpYXRlZCBzZW5kcyAodGVzdG5ldC1iYXR0ZXJ5IDQwMykiLAogICAgICAic2V2ZXJpdHkiOiAiTWVkaXVtIiwKICAgICAgInN0YXR1cyI6ICJEaWtpcmltIiwKICAgICAgInVwZGF0ZWQiOiAiMjAyNi0xMS0wNyIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJyMjQiLAogICAgICAicHJvZ3JhbUlkIjogInAtZ3JhdmlmaSIsCiAgICAgICJ0aXRsZSI6ICJDcmVhdG9yIHJld2VpZ2h0cyBhIHNtYXJ0IGJhc2tldCB2aWEgc3RvcHMiLAogICAgICAic2V2ZXJpdHkiOiAiTWVkaXVtIiwKICAgICAgInN0YXR1cyI6ICJEaWtpcmltIiwKICAgICAgInVwZGF0ZWQiOiAiMjAyNi0xMS0wOCIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJyMjUiLAogICAgICAicHJvZ3JhbUlkIjogInAtcmVsYXkiLAogICAgICAidGl0bGUiOiAiRjEg4oCUIFNvbGFuYSBmb3J3YXJkZXIgdW5jaGVja2VkIGRlcG9zaXRvciAoYW55IHNpZ25lciwgc2hhcmVkIGdsb2JhbCBQREEpIiwKICAgICAgInNldmVyaXR5IjogIkhpZ2giLAogICAgICAic3RhdHVzIjogIkRpa2lyaW0iLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTE0IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIyNiIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1yZWxheSIsCiAgICAgICJ0aXRsZSI6ICJGMiDigJQgRGVwb3NpdG9yeSBmZWUtb24tdHJhbnNmZXIgaW5mbGF0aW9uIiwKICAgICAgInNldmVyaXR5IjogIkhpZ2giLAogICAgICAic3RhdHVzIjogIkRpa2lyaW0iLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTE0IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIyNyIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1yZWxheSIsCiAgICAgICJ0aXRsZSI6ICJGNCDigJQgU2hvcnRmYWxsIHdyb25nLWFjY291bnQgY3JlZGl0IiwKICAgICAgInNldmVyaXR5IjogIk1lZGl1bSIsCiAgICAgICJzdGF0dXMiOiAiRGlraXJpbSIsCiAgICAgICJ1cGRhdGVkIjogIjIwMjYtMTEtMTQiCiAgICB9LAogICAgewogICAgICAiaWQiOiAicjI4IiwKICAgICAgInByb2dyYW1JZCI6ICJwLWJsb2Nrb25vbWljcyIsCiAgICAgICJ0aXRsZSI6ICJTU1JGIGluIHN0b3JlIGh0dHBfY2FsbGJhY2sgYnlwYXNzZXMgYWRkcmVzcyBmaWx0ZXIsIHJlYWNoZXMgY2xvdWQgbWV0YWRhdGEgKHJlZGlyZWN0IGJ5cGFzcykiLAogICAgICAic2V2ZXJpdHkiOiAiSGlnaCIsCiAgICAgICJzdGF0dXMiOiAiVHJpYXNlIiwKICAgICAgInVwZGF0ZWQiOiAiMjAyNi0xMS0xNCIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJyMjkiLAogICAgICAicHJvZ3JhbUlkIjogInAtcnVuY2xvdWQiLAogICAgICAidGl0bGUiOiAiRi0wMDEg4oCUIFVuYm91bmRlZCBBUEkgdG9rZW4gbGlmZXRpbWUgKHJlZnJlc2ggY2hhaW4sIG9sZCB0b2tlbiBzdGF5cyB2YWxpZCkiLAogICAgICAic2V2ZXJpdHkiOiAiTWVkaXVtIiwKICAgICAgInN0YXR1cyI6ICJUcmlhc2UiLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTE0IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIzMCIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1ydW5jbG91ZCIsCiAgICAgICJ0aXRsZSI6ICJGLTAwMiDigJQgZm9ybXMucnVuY2xvdWQuaW8gc3ViZG9tYWluIHRha2VvdmVyIChDTkFNRSBrZSBUYWxseSwgY2VydCBleHBpcmVkKSIsCiAgICAgICJzZXZlcml0eSI6ICJIaWdoIiwKICAgICAgInN0YXR1cyI6ICJEaXR1dHVwIiwKICAgICAgInVwZGF0ZWQiOiAiMjAyNi0xMS0xNCIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJyMzEiLAogICAgICAicHJvZ3JhbUlkIjogInAtdG9yaSIsCiAgICAgICJ0aXRsZSI6ICJGLTEg4oCUIFRvcmlNaW50aW5nIHZlcmlmeVN0YWJsZXNMaW1pdCB0cnVuY2F0aW9uIChzdWItMWJwIG92ZXItbWludCwgc3RhYmxlc0RlbHRhTGltaXQ9MCkiLAogICAgICAic2V2ZXJpdHkiOiAiTG93IiwKICAgICAgInN0YXR1cyI6ICJEaWtpcmltIiwKICAgICAgInVwZGF0ZWQiOiAiMjAyNi0xMS0xNSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJyMzIiLAogICAgICAicHJvZ3JhbUlkIjogInAtdG9yaSIsCiAgICAgICJ0aXRsZSI6ICJGLTIg4oCUIFN0YWtlZFRyVVNEIHJlcG9ydExvc3MgY2FwIGJhc2Ugc2hyaW5rYWJsZSB2aWEgY29vbGRvd25Bc3NldHMiLAogICAgICAic2V2ZXJpdHkiOiAiTG93IiwKICAgICAgInN0YXR1cyI6ICJEaWtpcmltIiwKICAgICAgInVwZGF0ZWQiOiAiMjAyNi0xMS0xNSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJyMzMiLAogICAgICAicHJvZ3JhbUlkIjogInAtbWFyZ2luZmkiLAogICAgICAidGl0bGUiOiAiVW5jaGVja2VkIFB5dGggZXhwb25lbnQgcGFuaWNzIHRoZSBwcmljZSBjb252ZXJzaW9uIChFWFBfMTBfSTgwRjQ4LCBwcmljZS5yczoyNjY4KSIsCiAgICAgICJzZXZlcml0eSI6ICJMb3ciLAogICAgICAic3RhdHVzIjogIkRpa2lyaW0iLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTE1IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIzNCIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1lcGhlbWVyYWwiLAogICAgICAidGl0bGUiOiAiSDEg4oCUICh0ZW11YW4gcGVydGFtYSwgZHVwbGlrYXQpIiwKICAgICAgInNldmVyaXR5IjogIkxvdyIsCiAgICAgICJzdGF0dXMiOiAiRGl0dXR1cCIsCiAgICAgICJ1cGRhdGVkIjogIjIwMjYtMTEtMTIiCiAgICB9LAogICAgewogICAgICAiaWQiOiAicjM1IiwKICAgICAgInByb2dyYW1JZCI6ICJwLWVwaGVtZXJhbCIsCiAgICAgICJ0aXRsZSI6ICJSZXBvcnQgIzIg4oCUIHN3ZWVwLXJldmVydCIsCiAgICAgICJzZXZlcml0eSI6ICJJbmZvIiwKICAgICAgInN0YXR1cyI6ICJEaWtpcmltIiwKICAgICAgInVwZGF0ZWQiOiAiMjAyNi0xMS0xMiIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJyMzYiLAogICAgICAicHJvZ3JhbUlkIjogInAtcHVibnViIiwKICAgICAgInRpdGxlIjogIkMtY29yZSBBQ1JIIEFFUy0yNTYtQ0JDIHByZWRpY3RhYmxlIElWIHZpYSB1bnNlZWRlZCBsaWJjIHJhbmQoKSIsCiAgICAgICJzZXZlcml0eSI6ICJJbmZvIiwKICAgICAgInN0YXR1cyI6ICJEaXR1dHVwIiwKICAgICAgInVwZGF0ZWQiOiAiMjAyNi0xMS0xMyIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJyMzciLAogICAgICAicHJvZ3JhbUlkIjogInAtYnJhaW5jaGFpbiIsCiAgICAgICJ0aXRsZSI6ICJSb3VuZCAxIOKAlCBEZWNpc2lvbiAxMzggKyBEZWNpc2lvbiAyMTQgKGdyYWRlZCkiLAogICAgICAic2V2ZXJpdHkiOiAiSW5mbyIsCiAgICAgICJzdGF0dXMiOiAiRGl0dXR1cCIsCiAgICAgICJ1cGRhdGVkIjogIjIwMjYtMTEtMTMiCiAgICB9LAogICAgewogICAgICAiaWQiOiAicjM4IiwKICAgICAgInByb2dyYW1JZCI6ICJwLWdhcmRlbnMiLAogICAgICAidGl0bGUiOiAiR0hTQS14NHA3LXJ2OHYtdmZ2aiDigJQgKHRlbXVhbiBkaXRlcmltYSBNZWRpdW0pIiwKICAgICAgInNldmVyaXR5IjogIk1lZGl1bSIsCiAgICAgICJzdGF0dXMiOiAiRGl0ZXJpbWEiLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTE0IgogICAgfSwKICAgIHsKICAgICAgImlkIjogInIzOSIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1xdWFudHVzIiwKICAgICAgInRpdGxlIjogIkdIU0EtYzg0OC04M3ZqLTNoMnYg4oCUIChhZHZpc29yeSBwcml2YXQpIiwKICAgICAgInNldmVyaXR5IjogIkxvdyIsCiAgICAgICJzdGF0dXMiOiAiRGlraXJpbSIsCiAgICAgICJ1cGRhdGVkIjogIjIwMjYtMTEtMTEiCiAgICB9LAogICAgewogICAgICAiaWQiOiAicjQwIiwKICAgICAgInByb2dyYW1JZCI6ICJwLXlvdWdhbWUiLAogICAgICAidGl0bGUiOiAiR0hTQS1ybXE2LTZqcHEtODNjMyDigJQgKGFkdmlzb3J5IHByaXZhdCwgZHJhZnQpIiwKICAgICAgInNldmVyaXR5IjogIkhpZ2giLAogICAgICAic3RhdHVzIjogIkRpa2lyaW0iLAogICAgICAidXBkYXRlZCI6ICIyMDI2LTExLTEyIgogICAgfQogIF0sCiAgImFjdGlvbnMiOiBbCiAgICB7CiAgICAgICJpZCI6ICJhMSIsCiAgICAgICJwcm9ncmFtSWQiOiAicC1ydW5jbG91ZCIsCiAgICAgICJ0aXRsZSI6ICJQdXR1c2thbiByZWRpcmVjdCBSdW5DbG91ZDogdHVuZ2d1IGt1b3RhIGx1bmFyckAgdnMga2lyaW0gZGFyaSBhZ2RhYWxpZkBnbWFpbC5jb20iLAogICAgICAiZHVlIjogIiIsCiAgICAgICJwcmlvcml0eSI6ICJUaW5nZ2kiLAogICAgICAiZG9uZSI6IGZhbHNlCiAgICB9LAogICAgewogICAgICAiaWQiOiAiYTIiLAogICAgICAicHJvZ3JhbUlkIjogInAtZ2FyZGVucyIsCiAgICAgICJ0aXRsZSI6ICJQdXR1c2thbiByZXBvcnRlciBjcmVkaXQgR2FyZGVucyAoQWNjZXB0L0RlY2xpbmUpIiwKICAgICAgImR1ZSI6ICIiLAogICAgICAicHJpb3JpdHkiOiAiTm9ybWFsIiwKICAgICAgImRvbmUiOiBmYWxzZQogICAgfSwKICAgIHsKICAgICAgImlkIjogImEzIiwKICAgICAgInByb2dyYW1JZCI6ICJwLWRlcGlwYXkiLAogICAgICAidGl0bGUiOiAiU2lhcGthbiBkcmFmdCBmb2xsb3ctdXAgRGVwaVBheSIsCiAgICAgICJkdWUiOiAiMjAyNi0xMS0xOCIsCiAgICAgICJwcmlvcml0eSI6ICJOb3JtYWwiLAogICAgICAiZG9uZSI6IGZhbHNlCiAgICB9LAogICAgewogICAgICAiaWQiOiAiYTQiLAogICAgICAicHJvZ3JhbUlkIjogInAtZG9sb21pdGUiLAogICAgICAidGl0bGUiOiAiS2lyaW0gUE9DIERvbG9taXRlIHZpYSBEaXNjb3JkIFQtMjU2MyAodXNlciBraXJpbSBzZW5kaXJpKSIsCiAgICAgICJkdWUiOiAiIiwKICAgICAgInByaW9yaXR5IjogIk5vcm1hbCIsCiAgICAgICJkb25lIjogZmFsc2UKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJhNSIsCiAgICAgICJwcm9ncmFtSWQiOiAicC15b3VnYW1lIiwKICAgICAgInRpdGxlIjogIlB1dHVza2FuIGFmZmVjdGVkIHZlcnNpb24gKyByZXBvcnRlciBjcmVkaXQgWW91R2FtZSIsCiAgICAgICJkdWUiOiAiIiwKICAgICAgInByaW9yaXR5IjogIk5vcm1hbCIsCiAgICAgICJkb25lIjogZmFsc2UKICAgIH0KICBdCn0=", "https://reaper.my.id/data.json"];
+        var i = 0;
+        function next() {
+          if (i >= urls.length) { renderDataStatus(); return; }
+          var u = urls[i++];
+          fetchJson(u).then(function (j) {
+            if (!validData(j)) { next(); return; }
+            var isRemote = u.indexOf("reaper.my.id") !== -1 || u === "data.json";
+            var changed = !DATA || j.updatedAt !== DATA.updatedAt || j.reports.length !== (DATA.reports || []).length;
+            DATA = j;
+            if (isRemote) DATA_LIVE = true;
+            renderLiveLog(); renderDataStatus();
+            if (changed && counted) refreshCounters();
+          }).catch(function () { next(); });
+        }
+        next();
+      }
+      document.getElementById("sync-btn").addEventListener("click", function () { syncLive(); });
+
+      /* ================= live agents =================
+         Same pattern as the tracker data: the live status.json published
+         next to this page on reaper.my.id (collector runs every 15 min:
+         Lunar via Tencent systemd, Hermes 2 via its health-monitor state
+         file, ran via VM heartbeat) wins when it exists; the snapshot
+         baked in below — all three up, checked 11:57 WIB on 22 Nov 2026 —
+         is the fallback. */
+      var AGENTS_FALLBACK = {
+        updatedAt: "2026-11-22T04:57:17Z",
+        agents: [
+          { id: "lunar", name: "Lunar", role: "Hermes 1 · Tencent", status: "up", checked_at: "2026-11-22 11:57:17 WIB", detail: "gateway active, 9router active" },
+          { id: "hermes2", name: "Reaper", role: "Hermes 2 · Manus sandbox", status: "up", checked_at: "2026-11-22 11:57:17 WIB", detail: "gateway + 9router active (checked 2026-11-22 11:43:59 WIB)" },
+          { id: "ran", name: "ran", role: "Muse · this chat", status: "up", checked_at: "2026-11-22 11:57:17 WIB", detail: "heartbeat from the Muse VM" }
+        ]
+      };
+      var AGENTS = AGENTS_FALLBACK;
+      var AGENTS_LIVE = false;
+      function fmtTime(iso) {
+        try {
+          return new Intl.DateTimeFormat(lang === "id" ? "id-ID" : "en-GB", {
+            timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit", hour12: false
+          }).format(new Date(iso)) + " WIB";
+        } catch (e) { return "—"; }
+      }
+      function renderAgents() {
+        var d = I18N[lang];
+        document.querySelectorAll("[data-agent]").forEach(function (card) {
+          var id = card.getAttribute("data-agent"), a = null;
+          (AGENTS.agents || []).forEach(function (x) { if (x.id === id) a = x; });
+          var st = a && a.status ? String(a.status).toLowerCase() : "unknown";
+          card.classList.toggle("is-online", st === "online" || st === "up");
+          card.classList.toggle("is-offline", st === "offline" || st === "down");
+          var label = card.querySelector("[data-agent-status]");
+          if (label) label.textContent = (st === "online" || st === "up") ? d["ag.online"] : (st === "offline" || st === "down") ? d["ag.offline"] : d["ag.unknown"];
+          var seen = card.querySelector("[data-agent-seen]");
+          if (seen) seen.textContent = a && a.checked_at ? a.checked_at : (a && a.lastSeen ? fmtTime(a.lastSeen) : (AGENTS.updatedAt ? fmtTime(AGENTS.updatedAt) : "—"));
+          var det = card.querySelector("[data-agent-detail]");
+          if (det && a && a.detail) det.textContent = a.detail;
+        });
+        document.querySelectorAll("[data-agent-node]").forEach(function (node) {
+          var id = node.getAttribute("data-agent-node"), a = null;
+          (AGENTS.agents || []).forEach(function (x) { if (x.id === id) a = x; });
+          var st = a && a.status ? String(a.status).toLowerCase() : "unknown";
+          node.classList.toggle("is-online", st === "online" || st === "up");
+          node.classList.toggle("is-offline", st === "offline" || st === "down");
+        });
+        var lineEl = document.getElementById("agents-sync"), txt = document.getElementById("agents-sync-text");
+        if (lineEl && txt) {
+          txt.textContent = (AGENTS_LIVE ? d["agents.live"] : d["agents.snap"]) + " · " + d["data.updated"] + " " +
+            (AGENTS.updatedAt ? fmtDate(AGENTS.updatedAt) : "—");
+          lineEl.classList.toggle("live", AGENTS_LIVE);
+        }
+        var fdot = document.getElementById("ftab-agents-dot");
+        if (fdot) {
+          var list = AGENTS.agents || [];
+          var allUp = list.length > 0 && list.every(function (x) { var s = String(x.status || "").toLowerCase(); return s === "online" || s === "up"; });
+          var anyDown = list.some(function (x) { var s = String(x.status || "").toLowerCase(); return s === "offline" || s === "down"; });
+          fdot.className = "ftab-live-dot" + (allUp ? " up" : anyDown ? " down" : "");
+        }
+      }
+      function validAgents(j) {
+        return j && Object.prototype.toString.call(j.agents) === "[object Array]" && j.agents.length > 0;
+      }
+      function syncAgents() {
+        var urls = ["status.json", "data:application/json;base64,ewogInVwZGF0ZWRBdCI6ICIyMDI2LTExLTIyVDA0OjU3OjE3WiIsCiAiYWdlbnRzIjogWwogIHsKICAgImlkIjogImx1bmFyIiwKICAgIm5hbWUiOiAiTHVuYXIiLAogICAicm9sZSI6ICJIZXJtZXMgMSBcdTAwYjcgVGVuY2VudCIsCiAgICJzdGF0dXMiOiAidXAiLAogICAiY2hlY2tlZF9hdCI6ICIyMDI2LTExLTIyIDExOjU3OjE3IFdJQiIsCiAgICJkZXRhaWwiOiAiZ2F0ZXdheSBhY3RpdmUsIDlyb3V0ZXIgYWN0aXZlIgogIH0sCiAgewogICAiaWQiOiAiaGVybWVzMiIsCiAgICJuYW1lIjogIlJlYXBlciIsCiAgICJyb2xlIjogIkhlcm1lcyAyIFx1MDBiNyBNYW51cyBzYW5kYm94IiwKICAgInN0YXR1cyI6ICJ1cCIsCiAgICJjaGVja2VkX2F0IjogIjIwMjYtMTEtMjIgMTE6NTc6MTcgV0lCIiwKICAgImRldGFpbCI6ICJnYXRld2F5ICsgOXJvdXRlciBhY3RpdmUgKGNoZWNrZWQgMjAyNi0xMS0yMiAxMTo0Mzo1OSBXSUIpIgogIH0sCiAgewogICAiaWQiOiAicmFuIiwKICAgIm5hbWUiOiAicmFuIiwKICAgInJvbGUiOiAiTXVzZSBcdTAwYjcgdGhpcyBjaGF0IiwKICAgInN0YXR1cyI6ICJ1cCIsCiAgICJjaGVja2VkX2F0IjogIjIwMjYtMTEtMjIgMTE6NTc6MTcgV0lCIiwKICAgImRldGFpbCI6ICJoZWFydGJlYXQgZnJvbSB0aGUgTXVzZSBWTSIKICB9CiBdCn0=", "https://reaper.my.id/status.json", "agents.json", "https://reaper.my.id/agents.json"];
+        var i = 0;
+        function next() {
+          if (i >= urls.length) { renderAgents(); return; }
+          var u = urls[i++];
+          fetchJson(u).then(function (j) {
+            if (!validAgents(j)) { next(); return; }
+            AGENTS = j;
+            if (u === "status.json" || u.indexOf("reaper.my.id") !== -1) AGENTS_LIVE = true;
+            renderAgents();
+          }).catch(function () { next(); });
+        }
+        next();
+      }
+      var agentsSyncBtn = document.getElementById("agents-sync-btn");
+      if (agentsSyncBtn) agentsSyncBtn.addEventListener("click", function () { syncAgents(); });
+
+      /* ================= counters ================= */
+      var counted = false;
+      function runCounters() {
+        if (counted) return; counted = true;
+        var vals = statValues();
+        document.querySelectorAll(".count").forEach(function (el) {
+          var to = vals[el.getAttribute("data-stat")] || 0, t0 = null;
+          function step(ts) {
+            if (!t0) t0 = ts;
+            var p = Math.min((ts - t0) / 900, 1);
+            el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3)));
+            if (p < 1) requestAnimationFrame(step);
+          }
+          requestAnimationFrame(step);
+        });
+      }
+
+      function refreshCounters() {
+        var vals = statValues();
+        document.querySelectorAll(".count").forEach(function (el) {
+          el.textContent = vals[el.getAttribute("data-stat")] || 0;
+        });
+      }
+
+      /* ================= reveal ================= */
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) {
+            e.target.classList.add("in");
+            if (e.target.classList.contains("stats")) runCounters();
+            io.unobserve(e.target);
+          }
+        });
+      }, { threshold: 0.05, rootMargin: "0px 0px 240px 0px" });
+      document.querySelectorAll(".reveal").forEach(function (el) { io.observe(el); });
+      /* Fail-safe: content must never stay trapped invisible (e.g. in a
+         full-page capture that never scrolls). Reveal anything left after 2s. */
+      setTimeout(function () {
+        document.querySelectorAll(".reveal:not(.in)").forEach(function (el) {
+          el.classList.add("in");
+          if (el.classList.contains("stats")) runCounters();
+        });
+      }, 2000);
+
+      /* ================= work filter ================= */
+      var filterBtns = document.querySelectorAll(".filters button");
+      filterBtns.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          filterBtns.forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
+          btn.setAttribute("aria-pressed", "true");
+          var f = btn.getAttribute("data-filter"), visible = 0;
+          document.querySelectorAll(".work-row").forEach(function (row) {
+            var show = (f === "all" || row.getAttribute("data-cat") === f);
+            row.classList.toggle("hide", !show);
+            if (show) visible++;
+          });
+          document.getElementById("work-empty").style.display = visible ? "none" : "block";
+        });
+      });
+
+      /* ================= terminal ================= */
+      var body = document.getElementById("term-body");
+      var input = document.getElementById("term-input");
+      var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (reduced) { try { document.querySelectorAll(".mesh-svg animateMotion").forEach(function (m) { if (m.parentNode) m.parentNode.remove(); }); } catch (e) {} }
+
+      function line(html, cls) {
+        var d = document.createElement("div");
+        d.className = "out" + (cls ? " " + cls : "");
+        d.innerHTML = html;
+        body.appendChild(d);
+        body.scrollTop = body.scrollHeight;
+        return d;
+      }
+      function promptLine(cmd) {
+        line('<span class="p">➜ ~</span> ' + cmd.replace(/</g, "&lt;"));
+      }
+
+      var TXT = {
+        en: {
+          boot1: "whoami",
+          bootOut: "reaper — security researcher, indonesia\nbug bounty: web2 · web3 · open source",
+          bootHint: 'type "help" to see what this terminal knows.',
+          help: "commands:\n  whoami    who is this\n  skills    what he digs into\n  work      latest reports from the tracker\n  stats     live counts from the tracker\n  agents    which agents are live right now\n  stack     tools of the trade\n  contact   how to reach him\n  lang id   switch this page to bahasa indonesia\n  clear     wipe the terminal",
+          whoami: "reaper — independent security researcher.\n25 programs tracked, 40 reports filed.\nbreaks things with permission, writes it up with proof.",
+          skills: "ssrf · idor & session flaws · smart contract logic\nparser edge cases · recon automation",
+          work: "liquid web — unauthenticated ssrf (in triage)\nrelay — 3 solana bridge findings (in progress)\npgpainless — argon2 s2k memory exhaustion (ready)\nfull log: scroll down to section 02.",
+          stack: "burp suite · nuclei · foundry · interactsh\ncustom watchers on a 3-hour cron · too much coffee",
+          contact: "telegram  @holyinthefire\nx         @paraboyyyy\ngithub    reaperads\nlinkedin  agdaalif",
+          unknown: 'command not found: "%s" — try "help"',
+          switched: "bahasa diganti: indonesia. ketik \"bantuan\" kapan saja."
+        },
+        id: {
+          boot1: "siapa",
+          bootOut: "reaper — peneliti keamanan, indonesia\nbug bounty: web2 · web3 · open source",
+          bootHint: 'ketik "bantuan" untuk melihat isi terminal ini.',
+          help: "perintah:\n  siapa     siapa orang ini\n  keahlian  apa yang dia gali\n  kerja     laporan terbaru dari tracker\n  statistik angka live dari tracker\n  agen      agen apa saja yang lagi live\n  alat      perangkat kerja\n  kontak    cara menghubunginya\n  lang en   ganti halaman ini ke english\n  clear     bersihkan terminal",
+          whoami: "reaper — peneliti keamanan independen.\n25 program dilacak, 40 laporan terkirim.\nmerusak dengan izin, menulisnya dengan bukti.",
+          skills: "ssrf · idor & celah sesi · logika smart contract\nkasus tepi parser · otomasi recon",
+          work: "liquid web — ssrf tanpa autentikasi (ditriage)\nrelay — 3 temuan bridge solana (berjalan)\npgpainless — kehabisan memori argon2 s2k (siap)\nlog lengkap: gulir ke bagian 02.",
+          stack: "burp suite · nuclei · foundry · interactsh\nwatcher custom di cron 3 jam · kopi kebanyakan",
+          contact: "telegram  @holyinthefire\nx         @paraboyyyy\ngithub    reaperads\nlinkedin  agdaalif",
+          unknown: 'perintah tidak dikenal: "%s" — coba "bantuan"',
+          switched: "language switched: english. type \"help\" anytime."
+        }
+      };
+
+      function typeCmd(text, done) {
+        var d = document.createElement("div");
+        d.className = "out";
+        d.innerHTML = '<span class="p">➜ ~</span> <span class="typed"></span>';
+        body.appendChild(d);
+        var span = d.querySelector(".typed");
+        if (reduced) { span.textContent = text; body.scrollTop = body.scrollHeight; done && done(); return; }
+        span.parentElement.classList.add("caret");
+        var i = 0;
+        var iv = setInterval(function () {
+          span.textContent = text.slice(0, ++i);
+          body.scrollTop = body.scrollHeight;
+          if (i >= text.length) {
+            clearInterval(iv);
+            span.parentElement.classList.remove("caret");
+            done && done();
+          }
+        }, 55);
+      }
+
+      function boot() {
+        body.innerHTML = "";
+        var t = TXT[lang];
+        typeCmd(t.boot1, function () {
+          line(t.bootOut.replace(/\n/g, "<br>"));
+          line(t.bootHint, "dim");
+        });
+      }
+
+      function buildWhoami() {
+        var v = statValues();
+        return lang === "id"
+          ? "reaper — peneliti keamanan independen.\n" + v.programs + " program dilacak, " + v.reports + " laporan terkirim.\nmerusak dengan izin, menulisnya dengan bukti."
+          : "reaper — independent security researcher.\n" + v.programs + " programs tracked, " + v.reports + " reports filed.\nbreaks things with permission, writes it up with proof.";
+      }
+      function buildStats() {
+        var v = statValues();
+        var upd = DATA && DATA.updatedAt ? fmtDate(DATA.updatedAt) : "—";
+        return lang === "id"
+          ? "program   " + v.programs + " (" + v.active + " aktif)\nlaporan   " + v.reports + " (" + v.open + " masih berjalan)\ndata per  " + upd + (DATA_LIVE ? " · live" : " · snapshot")
+          : "programs  " + v.programs + " (" + v.active + " active)\nreports   " + v.reports + " (" + v.open + " still in play)\ndata as of " + upd + (DATA_LIVE ? " · live" : " · snapshot");
+      }
+      function buildAgents() {
+        var lines = (AGENTS.agents || []).map(function (a) {
+          var st = a.status === "up" ? (lang === "id" ? "online" : "online") : a.status;
+          return (a.name || a.id) + " — " + (a.role || "") + " · " + st + (a.checked_at ? " · " + a.checked_at : "");
+        });
+        lines.push(lang === "id" ? "detail lengkap: agent.reaper.my.id" : "full panel: agent.reaper.my.id");
+        return lines.join("\n");
+      }
+      function buildWork() {
+        var reps = ((DATA && DATA.reports) || []).slice().sort(function (a, b) { return (b.updated || "") < (a.updated || "") ? -1 : 1; }).slice(0, 5);
+        var lines = reps.map(function (r) {
+          return (r.updated || "") + "  " + progName(r.programId).toLowerCase() + " — " + (r.title || "");
+        });
+        lines.push(lang === "id" ? "log lengkap: gulir ke bagian 02." : "full log: scroll down to section 02.");
+        return lines.join("\n");
+      }
+
+      function runCommand(raw) {
+        var cmd = raw.trim().toLowerCase();
+        promptLine(raw.trim());
+        if (!cmd) return;
+        var t = TXT[lang];
+        var map = {
+          help: "help", bantuan: "help",
+          whoami: "whoami", siapa: "whoami",
+          skills: "skills", keahlian: "skills",
+          work: "work", kerja: "work",
+          stack: "stack", alat: "stack",
+          contact: "contact", kontak: "contact"
+        };
+        if (cmd === "clear" || cmd === "bersihkan") { body.innerHTML = ""; return; }
+        if (cmd === "lang id" || cmd === "bahasa id") {
+          applyLang("id"); line(TXT.id.switched); return;
+        }
+        if (cmd === "lang en" || cmd === "bahasa en") {
+          applyLang("en"); line(TXT.en.switched); return;
+        }
+        if (cmd === "sudo") { line(lang === "id" ? "usaha yang bagus. tidak." : "nice try. no."); return; }
+        if (cmd === "stats" || cmd === "statistik") { line(buildStats().replace(/\n/g, "<br>")); return; }
+        if (cmd === "agents" || cmd === "agen") { line(buildAgents().replace(/\n/g, "<br>")); return; }
+        var key = map[cmd];
+        if (key === "whoami") { line(buildWhoami().replace(/\n/g, "<br>")); return; }
+        if (key === "work") { line(buildWork().replace(/\n/g, "<br>")); return; }
+        if (key) line(t[key].replace(/\n/g, "<br>"));
+        else line(t.unknown.replace("%s", cmd.replace(/</g, "&lt;")));
+      }
+
+      input.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { runCommand(input.value); input.value = ""; }
+      });
+      document.getElementById("term").addEventListener("click", function () { input.focus(); });
+
+      /* re-boot terminal copy when language toggles via the header buttons */
+      var lastLang = lang;
+      ["lang-en", "lang-id"].forEach(function (id) {
+        document.getElementById(id).addEventListener("click", function () {
+          if (lang !== lastLang) { lastLang = lang; boot(); }
+        });
+      });
+
+      /* ================= footer tabs ================= */
+      var ftabBtns = Array.prototype.slice.call(document.querySelectorAll("[data-ftab]"));
+      function selectFtab(name, focus) {
+        ftabBtns.forEach(function (b) {
+          var on = b.getAttribute("data-ftab") === name;
+          b.setAttribute("aria-selected", on ? "true" : "false");
+          b.tabIndex = on ? 0 : -1;
+          var panel = document.getElementById(b.getAttribute("aria-controls"));
+          if (panel) panel.hidden = !on;
+          if (on && focus) b.focus();
+        });
+      }
+      /* ================= header section nav ================= */
+      var fnavLinks = Array.prototype.slice.call(document.querySelectorAll(".hnav-list a[data-nav]"));
+      function setActiveNav(id) {
+        fnavLinks.forEach(function (a) {
+          if (a.getAttribute("data-nav") === id) a.setAttribute("aria-current", "true");
+          else a.removeAttribute("aria-current");
+        });
+      }
+      fnavLinks.forEach(function (a) {
+        a.addEventListener("click", function () { setActiveNav(a.getAttribute("data-nav")); });
+      });
+      /* Mobile hamburger: the button (small screens only) toggles the
+         section list as a dropdown under the bar. Picking a link, Escape,
+         or a tap outside closes it again. */
+      var hnavBtn = document.getElementById("hnav-btn");
+      var hnavList = document.getElementById("hnav-list");
+      function closeHnav() {
+        if (!hnavList || !hnavList.classList.contains("open")) return;
+        hnavList.classList.remove("open");
+        hnavBtn.setAttribute("aria-expanded", "false");
+        hnavBtn.querySelector(".hnav-btn-icon").textContent = "☰";
+      }
+      if (hnavBtn && hnavList) {
+        hnavBtn.addEventListener("click", function () {
+          var open = hnavList.classList.toggle("open");
+          hnavBtn.setAttribute("aria-expanded", open ? "true" : "false");
+          hnavBtn.querySelector(".hnav-btn-icon").textContent = open ? "✕" : "☰";
+        });
+        hnavList.addEventListener("click", function (e) {
+          if (e.target.closest && e.target.closest("a")) closeHnav();
+        });
+        document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeHnav(); });
+        document.addEventListener("click", function (e) {
+          if (hnavList.classList.contains("open") && !(e.target.closest && e.target.closest(".statusbar"))) closeHnav();
+        });
+      }
+      if ("IntersectionObserver" in window) {
+        var navIO = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) { if (e.isIntersecting) setActiveNav(e.target.id); });
+        }, { rootMargin: "-30% 0px -60% 0px" });
+        ["top", "about", "work", "contact"].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) navIO.observe(el);
+        });
+      }
+
+      ftabBtns.forEach(function (b, i) {
+        b.addEventListener("click", function () { selectFtab(b.getAttribute("data-ftab"), false); });
+        b.addEventListener("keydown", function (e) {
+          var j = null;
+          if (e.key === "ArrowRight") j = (i + 1) % ftabBtns.length;
+          else if (e.key === "ArrowLeft") j = (i - 1 + ftabBtns.length) % ftabBtns.length;
+          if (j !== null) { e.preventDefault(); selectFtab(ftabBtns[j].getAttribute("data-ftab"), true); }
+        });
+      });
+
+      renderLiveLog();
+      renderDataStatus();
+      syncLive();
+      renderAgents();
+      syncAgents();
+      boot();
+      updateThemeLabel();
+    </script>
+  </body>
+</html>
